@@ -29,8 +29,9 @@ compila, nunca roda modelo, nunca guarda o repo principal.
 * **Preview**: WebView (local para HTML ou URL do túnel para o resto).
 * **GitHub**: conectar conta, escolher repo, clonar no servidor, status,
   commit + push pelo app.
-* **Conexão**: URL base configurável + token de pareamento (QR code gerado
-  no servidor). Nada de IP fixo: usa Tailscale ou Cloudflare Tunnel.
+* **Conexão**: URL base configurável + basic auth do próprio servidor
+  (`OPENCODE_SERVER_PASSWORD`, usuário `opencode`). Nada de IP fixo: usa
+  Tailscale ou Cloudflare Tunnel.
 
 ### Rede (sem abrir porta)
 
