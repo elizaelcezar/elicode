@@ -10,3 +10,6 @@ Thumbs.db
 .vscode/
 local.properties
 .gradle/
+*.keystore
+*.jks
+keystore.properties

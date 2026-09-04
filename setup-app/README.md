@@ -5,7 +5,15 @@ intent oficial `RUN_COMMAND` e executa toda a configuração sem digitar
 nada: pacotes, Ubuntu (proot), OpenCode, script do servidor, boot
 automático e teste de saúde.
 
-APK pronto: [`apk/elicode-setup.apk`](apk/elicode-setup.apk) (debug).
+APK pronto: [`apk/elicode-setup.apk`](apk/elicode-setup.apk) (release, assinado).
+
+## Build release (mantenedor)
+
+1. `setup-app/keystore.properties` (local, fora do git):
+   `storeFile`, `storePassword`, `keyAlias`, `keyPassword`.
+2. `./gradlew assembleRelease` → `apk/elicode-setup.apk`.
+3. O keystore (`elicode-release.keystore`, fora do repo) é insubstituível:
+   sem ele não há update do app instalado — **backup obrigatório**.
 
 ## Pré-requisitos (o app checa sozinho)
 
