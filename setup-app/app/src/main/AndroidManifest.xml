@@ -29,5 +29,10 @@
             android:name=".TermuxResultReceiver"
             android:exported="true" />
 
+        <activity
+            android:name=".ConsoleActivity"
+            android:exported="false"
+            android:label="console elicode" />
+
     </application>
 </manifest>

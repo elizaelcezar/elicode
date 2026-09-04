@@ -18,7 +18,9 @@ APK pronto: [`apk/elicode-setup.apk`](apk/elicode-setup.apk) (debug).
 1. Abra o app → confira os ✅ → **Configurar servidor**.
 2. Acompanhe o log (o passo do Ubuntu baixa ~300 MB).
 3. Ao final: **Testar servidor** → mostra URL/usuário/senha de pareamento.
-4. Falta manual só: Tailscale + copiar `opencode.json` de modelos
+4. **Abrir console (neste aparelho)** → usa o servidor local na hora, sem
+   outro dispositivo (WebView no `opencode web` com login automático).
+5. Falta manual só: Tailscale + copiar `opencode.json` de modelos
    (o passo 6 avisa se está ausente).
 
 ## Código

@@ -52,8 +52,13 @@ Ainda no Ubuntu, crie `~/elicode-start.sh`:
 #!/bin/bash
 export OPENCODE_SERVER_PASSWORD="TROQUE-POR-UMA-SENHA-FORTE"
 cd ~/elicode/work
-exec /root/.opencode/bin/opencode serve --port 4096 --hostname 0.0.0.0
+/root/.opencode/bin/opencode serve --port 4096 --hostname 0.0.0.0 &
+/root/.opencode/bin/opencode web --port 4097 --hostname 0.0.0.0 &
+wait
 ```
+
+> `serve` (4096) é a API para o futuro app cliente; `web` (4097) é o
+> console usável hoje no navegador/WebView do próprio aparelho.
 
 ```sh
 chmod +x ~/elicode-start.sh

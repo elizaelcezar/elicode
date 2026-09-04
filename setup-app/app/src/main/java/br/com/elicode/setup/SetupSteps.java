@@ -54,7 +54,9 @@ public final class SetupSteps {
                 "export OPENCODE_SERVER_PASSWORD='" + pairPassword + "'\n"
                 + "mkdir -p /root/elicode/work\n"
                 + "cd /root/elicode/work\n"
-                + "exec /root/.opencode/bin/opencode serve --port 4096 --hostname 0.0.0.0\n";
+                + "/root/.opencode/bin/opencode serve --port 4096 --hostname 0.0.0.0 &\n"
+                + "/root/.opencode/bin/opencode web --port 4097 --hostname 0.0.0.0 &\n"
+                + "wait\n";
         steps.add(new Step(4, "Criando script do servidor",
                 "proot-distro login ubuntu -- bash -c 'cat > /root/elicode-start.sh <<ELICODE_EOF\n"
                 + startScript + "ELICODE_EOF\n"

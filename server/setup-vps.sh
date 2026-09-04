@@ -45,7 +45,7 @@ Wants=network-online.target
 [Service]
 User=$SERVICE_USER
 WorkingDirectory=$WORKDIR
-ExecStart=$OPENCODE_BIN serve --port $OPENCODE_PORT --hostname 127.0.0.1
+ExecStart=/bin/bash -c 'export OPENCODE_SERVER_PASSWORD='"'"'$PAIR_PASSWORD'"'"'; $OPENCODE_BIN serve --port $OPENCODE_PORT --hostname 127.0.0.1 & $OPENCODE_BIN web --port 4097 --hostname 127.0.0.1 & wait'
 Restart=always
 RestartSec=5
 Environment=HOME=$USER_HOME

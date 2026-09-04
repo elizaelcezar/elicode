@@ -55,6 +55,13 @@
             android:layout_marginTop="8dp"
             android:text="Testar servidor" />
 
+        <Button
+            android:id="@+id/btn_console"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Abrir console (neste aparelho)" />
+
         <TextView
             android:id="@+id/tv_log"
             android:layout_width="match_parent"

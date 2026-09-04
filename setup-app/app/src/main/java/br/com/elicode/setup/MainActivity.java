@@ -63,6 +63,8 @@ public class MainActivity extends Activity {
         refreshChecks();
         btnStart.setOnClickListener(v -> startSetup());
         btnHealth.setOnClickListener(v -> checkHealth());
+        findViewById(R.id.btn_console).setOnClickListener(v ->
+                startActivity(new Intent(this, ConsoleActivity.class)));
         btnBattery.setOnClickListener(v -> requestBatteryOff());
     }
 
