@@ -93,6 +93,7 @@ public class MainActivity extends Activity {
         else sb.append("\n  → instale em https://f-droid.org/packages/com.termux");
         sb.append(check(boot, "Termux:Boot instalado"));
         if (termux && !boot) sb.append("  ⚠ use a MESMA loja do Termux (F-Droid) ou dá conflito\n");
+        sb.append(check(hasRunCommandPerm(), "Permissão de pilotar o Termux"));
         sb.append(check(x64, "Aparelho 64 bits"));
         sb.append(check(ramGb >= 4, String.format(Locale.getDefault(), "RAM: %d GB (ideal 4+)", ramGb)));
         sb.append(check(battOk, "Bateria liberada p/ o Termux"));
@@ -121,6 +122,38 @@ public class MainActivity extends Activity {
 
     private String check(boolean ok, String label) {
         return (ok ? "✅ " : "❌ ") + label + "\n";
+    }
+
+    private static final String PERM_RUN_COMMAND = "com.termux.permission.RUN_COMMAND";
+    private static final int REQ_RUN_COMMAND = 4001;
+
+    private boolean hasRunCommandPerm() {
+        try {
+            return checkSelfPermission(PERM_RUN_COMMAND)
+                    == android.content.pm.PackageManager.PERMISSION_GRANTED;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private void requestRunCommandPerm() {
+        try {
+            requestPermissions(new String[]{PERM_RUN_COMMAND}, REQ_RUN_COMMAND);
+        } catch (Exception e) {
+            Toast.makeText(this, "Não foi possível pedir a permissão do Termux", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQ_RUN_COMMAND) {
+            boolean ok = grantResults.length > 0
+                    && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED;
+            Toast.makeText(this, ok ? "Permissão concedida — toque em Configurar"
+                    : "Sem essa permissão o app não pilota o Termux", Toast.LENGTH_LONG).show();
+            refreshChecks();
+        }
     }
 
     private String installerOf(String pkg) {
@@ -174,6 +207,11 @@ public class MainActivity extends Activity {
 
     private void startSetup() {
         if (running) return;
+        if (!hasRunCommandPerm()) {
+            Toast.makeText(this, "Permita pilotar o Termux no próximo diálogo", Toast.LENGTH_LONG).show();
+            requestRunCommandPerm();
+            return;
+        }
         steps = SetupSteps.build(pairPassword);
         stepIndex = -1;
         running = true;
