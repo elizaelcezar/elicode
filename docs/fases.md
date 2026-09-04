@@ -4,7 +4,8 @@
 
 * [x] Repo + decisões (VPS, git no servidor, 1 projeto por vez)
 * [x] Arquitetura documentada
-* [ ] VPS provisionada (Oracle Free)
+* [ ] VPS provisionada (Oracle Free) **ou** tablet configurado
+  (`docs/tablet-servidor.md`)
 
 ## Fase 1 — Chat funcionando (MVP)
 
