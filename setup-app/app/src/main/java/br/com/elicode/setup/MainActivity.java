@@ -200,7 +200,12 @@ public class MainActivity extends Activity {
         try {
             TermuxBridge.run(this, "elicode: " + s.title, s.command, 1000 + stepIndex);
         } catch (Exception e) {
-            appendLog("✖ Falha ao chamar o Termux: " + e.getMessage());
+            String msg = e.getMessage() != null ? e.getMessage() : e.toString();
+            appendLog("✖ Falha ao chamar o Termux: " + msg);
+            if (msg.contains("without permission")) {
+                appendLog("→ Correção: este app foi instalado ANTES do Termux e ficou sem a permissão. "
+                        + "Desinstale o elicode-setup e instale de novo (com o Termux já instalado).");
+            }
             running = false;
             btnStart.setEnabled(true);
         }
