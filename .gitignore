@@ -8,3 +8,5 @@ build/
 Thumbs.db
 .idea/
 .vscode/
+local.properties
+.gradle/

@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="20dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="elicode · instalar servidor"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            android:textColor="#1F3D2E" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Este app configura o Termux deste tablet como servidor do elicode, sozinho."
+            android:textColor="#4A5A52" />
+
+        <TextView
+            android:id="@+id/tv_checks"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Verificando…"
+            android:textSize="15sp"
+            android:textColor="#1F3D2E" />
+
+        <Button
+            android:id="@+id/btn_fix_battery"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Liberar bateria do Termux"
+            android:visibility="gone" />
+
+        <Button
+            android:id="@+id/btn_start"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="Configurar servidor" />
+
+        <Button
+            android:id="@+id/btn_health"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Testar servidor" />
+
+        <TextView
+            android:id="@+id/tv_log"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="#1F3D2E"
+            android:padding="12dp"
+            android:text="Log…"
+            android:textColor="#F2E9D8"
+            android:textSize="13sp"
+            android:typeface="monospace"
+            android:minHeight="160dp" />
+
+        <TextView
+            android:id="@+id/tv_creds"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:textSize="15sp"
+            android:textColor="#1F3D2E"
+            android:visibility="gone" />
+    </LinearLayout>
+</ScrollView>

@@ -1,0 +1,264 @@
+package br.com.elicode.setup;
+
+import android.app.Activity;
+import android.app.ActivityManager;
+import android.content.Context;
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.net.Uri;
+import android.os.Build;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.PowerManager;
+import android.provider.Settings;
+import android.view.View;
+import android.widget.Button;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.Base64;
+import java.util.List;
+import java.util.Locale;
+
+/** Wizard: checa pré-requisitos, executa o setup no Termux e testa o servidor. */
+public class MainActivity extends Activity {
+
+    private TextView tvChecks, tvLog, tvCreds;
+    private Button btnStart, btnHealth, btnBattery;
+    private final Handler handler = new Handler(Looper.getMainLooper());
+    private final StringBuilder log = new StringBuilder();
+
+    private List<SetupSteps.Step> steps;
+    private int stepIndex = -1;
+    private boolean running = false;
+    private String pairPassword = "";
+    private Runnable watchdog;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+
+        tvChecks = findViewById(R.id.tv_checks);
+        tvLog = findViewById(R.id.tv_log);
+        tvCreds = findViewById(R.id.tv_creds);
+        btnStart = findViewById(R.id.btn_start);
+        btnHealth = findViewById(R.id.btn_health);
+        btnBattery = findViewById(R.id.btn_fix_battery);
+
+        SharedPreferences p = getSharedPreferences("elicode_setup", MODE_PRIVATE);
+        pairPassword = p.getString("pair_password", "");
+        if (pairPassword.isEmpty()) {
+            pairPassword = SetupSteps.newPassword(24);
+            p.edit().putString("pair_password", pairPassword).apply();
+        }
+
+        TermuxResultReceiver.listener = this::onTermuxResult;
+
+        refreshChecks();
+        btnStart.setOnClickListener(v -> startSetup());
+        btnHealth.setOnClickListener(v -> checkHealth());
+        btnBattery.setOnClickListener(v -> requestBatteryOff());
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (TermuxResultReceiver.listener != null) TermuxResultReceiver.listener = null;
+        super.onDestroy();
+    }
+
+    // ---------- pré-requisitos ----------
+
+    private void refreshChecks() {
+        boolean termux = TermuxBridge.isInstalled(this, "com.termux");
+        boolean boot = TermuxBridge.isInstalled(this, "com.termux.boot");
+        boolean x64 = TermuxBridge.is64Bit();
+        boolean battOk = isBatteryOff();
+        long ramGb = totalRamGb();
+
+        StringBuilder sb = new StringBuilder();
+        sb.append(check(termux, "Termux instalado (via F-Droid)"));
+        if (!termux) sb.append("\n  → instale em https://f-droid.org/packages/com.termux");
+        sb.append(check(boot, "Termux:Boot instalado"));
+        sb.append(check(x64, "Aparelho 64 bits"));
+        sb.append(check(ramGb >= 4, String.format(Locale.getDefault(), "RAM: %d GB (ideal 4+)", ramGb)));
+        sb.append(check(battOk, "Bateria liberada p/ o Termux"));
+        tvChecks.setText(sb.toString());
+        btnBattery.setVisibility(battOk ? View.GONE : View.VISIBLE);
+        btnStart.setEnabled(termux && x64);
+    }
+
+    private String check(boolean ok, String label) {
+        return (ok ? "✅ " : "❌ ") + label + "\n";
+    }
+
+    private boolean isBatteryOff() {
+        try {
+            PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+            return pm != null && pm.isIgnoringBatteryOptimizations("com.termux");
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private long totalRamGb() {
+        try {
+            ActivityManager am = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
+            ActivityManager.MemoryInfo mi = new ActivityManager.MemoryInfo();
+            am.getMemoryInfo(mi);
+            return mi.totalMem / (1024L * 1024L * 1024L);
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
+    private void requestBatteryOff() {
+        try {
+            Intent i = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                    Uri.parse("package:com.termux"));
+            startActivity(i);
+        } catch (Exception e) {
+            Toast.makeText(this, "Abra as configs e libere a bateria do Termux", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    // ---------- execução sequencial ----------
+
+    private void startSetup() {
+        if (running) return;
+        steps = SetupSteps.build(pairPassword);
+        stepIndex = -1;
+        running = true;
+        btnStart.setEnabled(false);
+        log.setLength(0);
+        tvCreds.setVisibility(View.GONE);
+        appendLog("Iniciando configuração…");
+        nextStep();
+    }
+
+    private void nextStep() {
+        stepIndex++;
+        if (stepIndex >= steps.size()) {
+            running = false;
+            btnStart.setEnabled(true);
+            appendLog("✔ Configuração concluída. Teste o servidor abaixo.");
+            showCreds();
+            return;
+        }
+        SetupSteps.Step s = steps.get(stepIndex);
+        appendLog("▶ [" + (stepIndex + 1) + "/" + steps.size() + "] " + s.title);
+        if (s.hint != null) appendLog("  (" + s.hint + ")");
+        armWatchdog(s);
+        try {
+            TermuxBridge.run(this, "elicode: " + s.title, s.command, 1000 + stepIndex);
+        } catch (Exception e) {
+            appendLog("✖ Falha ao chamar o Termux: " + e.getMessage());
+            running = false;
+            btnStart.setEnabled(true);
+        }
+    }
+
+    private void armWatchdog(SetupSteps.Step s) {
+        cancelWatchdog();
+        long timeout = (s.id == 2) ? 25 * 60 * 1000L : 10 * 60 * 1000L;
+        watchdog = () -> {
+            if (running) appendLog("… ainda trabalhando em '" + s.title + "' (aguarde, passos longos baixam centenas de MB)");
+        };
+        handler.postDelayed(watchdog, timeout);
+    }
+
+    private void cancelWatchdog() {
+        if (watchdog != null) handler.removeCallbacks(watchdog);
+        watchdog = null;
+    }
+
+    private void onTermuxResult(int requestId, int exitCode, String stdout, String stderr, String err) {
+        handler.post(() -> {
+            if (!running) return;
+            cancelWatchdog();
+            int idx = requestId - 1000;
+            if (idx != stepIndex || idx < 0 || idx >= steps.size()) return;
+            SetupSteps.Step s = steps.get(idx);
+            String out = (stdout == null ? "" : stdout).trim();
+            appendLog("  exit=" + exitCode + (out.isEmpty() ? "" : " :: " + tail(out, 300)));
+            boolean ok = exitCode == 0 && (s.marker == null || out.contains(s.marker));
+            if (s.id == 6) { // auth: só avisa
+                if (out.contains("AUTH_OK")) appendLog("  Auth dos modelos encontrada ✔");
+                else appendLog("  ⚠ Auth dos modelos ausente — copie seu opencode.json depois (não bloqueia).");
+                nextStep();
+                return;
+            }
+            if (ok) {
+                appendLog("  ✔ ok");
+                nextStep();
+            } else {
+                appendLog("  ✖ falhou" + (stderr != null && !stderr.trim().isEmpty() ? " :: " + tail(stderr.trim(), 300) : ""));
+                appendLog("  Abra o Termux e confira o erro; depois toque em Configurar de novo.");
+                running = false;
+                btnStart.setEnabled(true);
+            }
+        });
+    }
+
+    // ---------- saúde + credenciais ----------
+
+    private void checkHealth() {
+        appendLog("Testando http://127.0.0.1:4096/global/health …");
+        new Thread(() -> {
+            String res;
+            try {
+                URL url = new URL("http://127.0.0.1:4096/global/health");
+                HttpURLConnection c = (HttpURLConnection) url.openConnection();
+                c.setConnectTimeout(10000);
+                c.setReadTimeout(10000);
+                String basic = "opencode:" + pairPassword;
+                String encoded;
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    encoded = Base64.getEncoder().encodeToString(basic.getBytes("UTF-8"));
+                } else {
+                    encoded = android.util.Base64.encodeToString(basic.getBytes("UTF-8"), android.util.Base64.NO_WRAP);
+                }
+                c.setRequestProperty("Authorization", "Basic " + encoded);
+                int code = c.getResponseCode();
+                BufferedReader br = new BufferedReader(new InputStreamReader(
+                        code < 400 ? c.getInputStream() : c.getErrorStream()));
+                StringBuilder sb = new StringBuilder();
+                String line;
+                while ((line = br.readLine()) != null) sb.append(line);
+                res = "HTTP " + code + " " + sb;
+            } catch (Exception e) {
+                res = "ERRO: " + e.getMessage();
+            }
+            final String msg = res;
+            handler.post(() -> {
+                appendLog(msg.contains("healthy") ? "✔ Servidor no ar: " + msg : "Resposta: " + msg);
+                if (msg.contains("healthy")) showCreds();
+            });
+        }).start();
+    }
+
+    private void showCreds() {
+        tvCreds.setVisibility(View.VISIBLE);
+        tvCreds.setText("Servidor pronto ✅\n"
+                + "URL (neste tablet): http://127.0.0.1:4096\n"
+                + "Usuário: opencode\n"
+                + "Senha: " + pairPassword + "\n\n"
+                + "Falta só: Tailscale neste tablet + copiar seu opencode.json de modelos. "
+                + "No celular, use o IP Tailscale do tablet.");
+    }
+
+    private void appendLog(String s) {
+        log.append(s).append("\n");
+        tvLog.setText(log.toString());
+    }
+
+    private String tail(String s, int n) {
+        if (s.length() <= n) return s.replace("\n", " | ");
+        return ("…" + s.substring(s.length() - n)).replace("\n", " | ");
+    }
+}
