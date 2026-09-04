@@ -29,6 +29,7 @@ if ! command -v opencode >/dev/null 2>&1; then
 fi
 
 echo "== [4/5] diretorio de trabalho + servico systemd =="
+OPENCODE_BIN="$(command -v opencode || echo /usr/local/bin/opencode)"
 mkdir -p "$WORKDIR"
 chown "$SERVICE_USER:$SERVICE_USER" /opt/elicode "$WORKDIR"
 cat > /etc/systemd/system/elicode-serve.service <<EOF
@@ -40,7 +41,7 @@ Wants=network-online.target
 [Service]
 User=$SERVICE_USER
 WorkingDirectory=$WORKDIR
-ExecStart=/usr/local/bin/opencode serve --port $OPENCODE_PORT --hostname 127.0.0.1
+ExecStart=$OPENCODE_BIN serve --port $OPENCODE_PORT --hostname 127.0.0.1
 Restart=always
 RestartSec=5
 Environment=HOME=/home/$SERVICE_USER
