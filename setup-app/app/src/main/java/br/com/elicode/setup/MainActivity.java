@@ -89,8 +89,10 @@ public class MainActivity extends Activity {
 
         StringBuilder sb = new StringBuilder();
         sb.append(check(termux, "Termux instalado (via F-Droid)"));
-        if (!termux) sb.append("\n  → instale em https://f-droid.org/packages/com.termux");
+        if (termux) sb.append("  fonte: ").append(installerOf("com.termux")).append("\n");
+        else sb.append("\n  → instale em https://f-droid.org/packages/com.termux");
         sb.append(check(boot, "Termux:Boot instalado"));
+        if (termux && !boot) sb.append("  ⚠ use a MESMA loja do Termux (F-Droid) ou dá conflito\n");
         sb.append(check(x64, "Aparelho 64 bits"));
         sb.append(check(ramGb >= 4, String.format(Locale.getDefault(), "RAM: %d GB (ideal 4+)", ramGb)));
         sb.append(check(battOk, "Bateria liberada p/ o Termux"));
@@ -119,6 +121,23 @@ public class MainActivity extends Activity {
 
     private String check(boolean ok, String label) {
         return (ok ? "✅ " : "❌ ") + label + "\n";
+    }
+
+    private String installerOf(String pkg) {
+        try {
+            String who;
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                who = getPackageManager().getInstallSourceInfo(pkg).getInstallingPackageName();
+            } else {
+                who = getPackageManager().getInstallerPackageName(pkg);
+            }
+            if (who == null) return "desconhecida";
+            if (who.contains("fdroid")) return "F-Droid ✅";
+            if (who.contains("vending") || who.contains("play")) return "Play Store ⚠";
+            return who;
+        } catch (Exception e) {
+            return "desconhecida";
+        }
     }
 
     private boolean isBatteryOff() {
