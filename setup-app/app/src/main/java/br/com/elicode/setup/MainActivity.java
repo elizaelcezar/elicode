@@ -69,6 +69,9 @@ public class MainActivity extends Activity {
         TermuxResultReceiver.listener = this::onTermuxResult;
 
         refreshChecks();
+        if (!getSharedPreferences("elicode_setup", MODE_PRIVATE).getBoolean("termux_ok", false)) {
+            showFixCard();
+        }
         btnStart.setOnClickListener(v -> startSetup());
         btnHealth.setOnClickListener(v -> checkHealth());
         findViewById(R.id.btn_console).setOnClickListener(v ->
@@ -125,6 +128,18 @@ public class MainActivity extends Activity {
         super.onResume();
         // Volta da loja com o app instalado: recheca sem precisar reiniciar.
         if (!running) refreshChecks();
+    }
+
+    private void showFixCard() {
+        tvFix.setText("ANTES: no Termux, execute isto UMA vez:\n" + FIX_CMD
+                + "\nDepois feche o Termux por completo e abra de novo.");
+        tvFix.setVisibility(View.VISIBLE);
+        btnCopyFix.setVisibility(View.VISIBLE);
+    }
+
+    private void hideFixCard() {
+        tvFix.setVisibility(View.GONE);
+        btnCopyFix.setVisibility(View.GONE);
     }
 
     private void openFdroid(String pkg) {
@@ -223,8 +238,7 @@ public class MainActivity extends Activity {
 
     private void startSetup() {
         if (running) return;
-        tvFix.setVisibility(View.GONE);
-        btnCopyFix.setVisibility(View.GONE);
+        hideFixCard();
         if (!hasRunCommandPerm()) {
             Toast.makeText(this, "Permita pilotar o Termux no próximo diálogo", Toast.LENGTH_LONG).show();
             requestRunCommandPerm();
@@ -299,19 +313,24 @@ public class MainActivity extends Activity {
             }
             if (ok) {
                 appendLog("  ✔ ok");
+                if (s.id == 0) {
+                    getSharedPreferences("elicode_setup", MODE_PRIVATE)
+                            .edit().putBoolean("termux_ok", true).apply();
+                    hideFixCard();
+                }
                 nextStep();
             } else {
                 appendLog("  ✖ falhou" + (stderr != null && !stderr.trim().isEmpty() ? " :: " + tail(stderr.trim(), 300) : ""));
                 String blob = (stdout == null ? "" : stdout) + "\n"
                         + (stderr == null ? "" : stderr) + "\n" + err;
-                if (blob.contains("allow-external-apps")) {
-                    appendLog("  → O Termux bloqueou: falta liberar apps externos (uma vez só):");
-                    appendLog("  1) Abra o Termux e cole o comando do cartão amarelo");
-                    appendLog("  2) Feche e abra o Termux de novo");
+                // O Termux quase nunca devolve o motivo (falha pré-execução):
+                // no passo 0, presuma o bloqueio e mostre o cartão sempre.
+                if (s.id == 0 || blob.contains("allow-external-apps")) {
+                    appendLog("  → Causa provável: o Termux bloqueia apps externos até liberar (uma vez só).");
+                    appendLog("  1) Copie o comando do cartão amarelo e execute no Termux");
+                    appendLog("  2) Feche o Termux por completo e abra de novo");
                     appendLog("  3) Toque em Configurar servidor aqui");
-                    tvFix.setText("No Termux, execute:\n" + FIX_CMD);
-                    tvFix.setVisibility(View.VISIBLE);
-                    btnCopyFix.setVisibility(View.VISIBLE);
+                    showFixCard();
                 } else {
                     appendLog("  Abra o Termux e confira o erro; depois toque em Configurar de novo.");
                 }
