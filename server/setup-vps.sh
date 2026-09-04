@@ -6,7 +6,11 @@ set -euo pipefail
 
 OPENCODE_PORT="${OPENCODE_PORT:-4096}"
 WORKDIR="/opt/elicode/work"
-SERVICE_USER="${SUDO_USER:-ubuntu}"
+# Usuario do servico: quem chamou via sudo, o usuario atual, ou root.
+if [ -n "${SUDO_USER:-}" ]; then SERVICE_USER="$SUDO_USER";
+elif [ "$(id -un)" != "root" ]; then SERVICE_USER="$(id -un)";
+else SERVICE_USER="root"; fi
+USER_HOME="$(eval echo "~$SERVICE_USER")"
 # Senha do pareamento APK <-> servidor (basic auth: usuario `opencode`).
 # Gere outra depois com: sudo sed -i "s/^Environment=OPENCODE_SERVER_PASSWORD=.*/Environment=OPENCODE_SERVER_PASSWORD=NOVA/" /etc/systemd/system/elicode-serve.service && sudo systemctl restart elicode-serve
 PAIR_PASSWORD="$(openssl rand -base64 24 | tr -d '\n')"
@@ -44,7 +48,7 @@ WorkingDirectory=$WORKDIR
 ExecStart=$OPENCODE_BIN serve --port $OPENCODE_PORT --hostname 127.0.0.1
 Restart=always
 RestartSec=5
-Environment=HOME=/home/$SERVICE_USER
+Environment=HOME=$USER_HOME
 Environment=OPENCODE_SERVER_PASSWORD=$PAIR_PASSWORD
 
 [Install]
@@ -66,7 +70,7 @@ echo "  senha   : $PAIR_PASSWORD"
 echo
 echo "Proximos passos:"
 echo "  1. Instale o Tailscale na VPS (https://tailscale.com/download) e no celular; mesma conta."
-echo "  2. Copie seu ~/.config/opencode/opencode.json (auth dos modelos) para /home/$SERVICE_USER/.config/opencode/"
+echo "  2. Copie seu ~/.config/opencode/opencode.json (auth dos modelos) para $USER_HOME/.config/opencode/"
 echo "  3. Teste: curl -u opencode:SENHA http://127.0.0.1:$OPENCODE_PORT/global/health"
 echo "  4. No APK: URL base = http://<ip-tailscale-da-vps>:$OPENCODE_PORT + usuario/senha acima."
 echo "  5. Logs: journalctl -u elicode-serve -f"
