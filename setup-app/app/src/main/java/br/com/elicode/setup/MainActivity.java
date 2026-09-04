@@ -28,8 +28,12 @@ import java.util.Locale;
 /** Wizard: checa pré-requisitos, executa o setup no Termux e testa o servidor. */
 public class MainActivity extends Activity {
 
-    private TextView tvChecks, tvLog, tvCreds;
-    private Button btnStart, btnHealth, btnBattery, btnTermux, btnBoot;
+    private TextView tvChecks, tvLog, tvCreds, tvFix;
+    private Button btnStart, btnHealth, btnBattery, btnTermux, btnBoot, btnCopyFix;
+
+    /** Comando único que libera apps externos no Termux (rodar UMA vez lá dentro). */
+    private static final String FIX_CMD =
+            "mkdir -p ~/.termux && printf 'allow-external-apps = true\n' >> ~/.termux/termux.properties";
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final StringBuilder log = new StringBuilder();
 
@@ -52,6 +56,8 @@ public class MainActivity extends Activity {
         btnBattery = findViewById(R.id.btn_fix_battery);
         btnTermux = findViewById(R.id.btn_install_termux);
         btnBoot = findViewById(R.id.btn_install_boot);
+        tvFix = findViewById(R.id.tv_fix);
+        btnCopyFix = findViewById(R.id.btn_copy_fix);
 
         SharedPreferences p = getSharedPreferences("elicode_setup", MODE_PRIVATE);
         pairPassword = p.getString("pair_password", "");
@@ -70,6 +76,16 @@ public class MainActivity extends Activity {
         btnBattery.setOnClickListener(v -> requestBatteryOff());
         btnTermux.setOnClickListener(v -> openFdroid("com.termux"));
         btnBoot.setOnClickListener(v -> openFdroid("com.termux.boot"));
+        btnCopyFix.setOnClickListener(v -> {
+            try {
+                android.content.ClipboardManager cm = (android.content.ClipboardManager)
+                        getSystemService(Context.CLIPBOARD_SERVICE);
+                cm.setPrimaryClip(android.content.ClipData.newPlainText("elicode", FIX_CMD));
+                Toast.makeText(this, "Comando copiado — cole no Termux", Toast.LENGTH_LONG).show();
+            } catch (Exception e) {
+                Toast.makeText(this, FIX_CMD, Toast.LENGTH_LONG).show();
+            }
+        });
     }
 
     @Override
@@ -207,6 +223,8 @@ public class MainActivity extends Activity {
 
     private void startSetup() {
         if (running) return;
+        tvFix.setVisibility(View.GONE);
+        btnCopyFix.setVisibility(View.GONE);
         if (!hasRunCommandPerm()) {
             Toast.makeText(this, "Permita pilotar o Termux no próximo diálogo", Toast.LENGTH_LONG).show();
             requestRunCommandPerm();
@@ -284,7 +302,19 @@ public class MainActivity extends Activity {
                 nextStep();
             } else {
                 appendLog("  ✖ falhou" + (stderr != null && !stderr.trim().isEmpty() ? " :: " + tail(stderr.trim(), 300) : ""));
-                appendLog("  Abra o Termux e confira o erro; depois toque em Configurar de novo.");
+                String blob = (stdout == null ? "" : stdout) + "\n"
+                        + (stderr == null ? "" : stderr) + "\n" + err;
+                if (blob.contains("allow-external-apps")) {
+                    appendLog("  → O Termux bloqueou: falta liberar apps externos (uma vez só):");
+                    appendLog("  1) Abra o Termux e cole o comando do cartão amarelo");
+                    appendLog("  2) Feche e abra o Termux de novo");
+                    appendLog("  3) Toque em Configurar servidor aqui");
+                    tvFix.setText("No Termux, execute:\n" + FIX_CMD);
+                    tvFix.setVisibility(View.VISIBLE);
+                    btnCopyFix.setVisibility(View.VISIBLE);
+                } else {
+                    appendLog("  Abra o Termux e confira o erro; depois toque em Configurar de novo.");
+                }
                 running = false;
                 btnStart.setEnabled(true);
             }

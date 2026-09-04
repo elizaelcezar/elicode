@@ -57,6 +57,26 @@
             android:text="Instalar Termux:Boot (F-Droid)"
             android:visibility="gone" />
 
+        <TextView
+            android:id="@+id/tv_fix"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:background="#FFF3CD"
+            android:padding="12dp"
+            android:textSize="13sp"
+            android:textColor="#1F3D2E"
+            android:textIsSelectable="true"
+            android:visibility="gone" />
+
+        <Button
+            android:id="@+id/btn_copy_fix"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Copiar comando de liberação"
+            android:visibility="gone" />
+
         <Button
             android:id="@+id/btn_start"
             android:layout_width="match_parent"
