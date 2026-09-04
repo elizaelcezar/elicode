@@ -22,16 +22,19 @@ compila, nunca roda modelo, nunca guarda o repo principal.
 
 ### APK (Kotlin, minSdk 26)
 
-* **Chat**: lista de mensagens + streaming SSE, composer, anexos de arquivo.
-* **Sessões**: criar/continuar/renomear/encerrar; uma ativa por vez (v1).
-* **Arquivos**: navegar na árvore do projeto (via API), ver e editar texto,
-  diff antes de aplicar (quando o agente propõe edição manual).
-* **Preview**: WebView (local para HTML ou URL do túnel para o resto).
-* **GitHub**: conectar conta, escolher repo, clonar no servidor, status,
-  commit + push pelo app.
-* **Conexão**: URL base configurável + basic auth do próprio servidor
-  (`OPENCODE_SERVER_PASSWORD`, usuário `opencode`). Nada de IP fixo: usa
-  Tailscale ou Cloudflare Tunnel.
+Um APK, dois modos (escolha no primeiro uso):
+* **Cliente** — chat, arquivos, preview, GitHub. Conecta no servidor pela
+  URL base (Tailscale do tablet/VPS, ou `127.0.0.1` se servidor local).
+  * Chat com streaming (SSE), composer, indicador de "agente trabalhando".
+  * Sessões: criar/continuar/renomear/encerrar; uma ativa por vez (v1).
+  * Arquivos: navegar na árvore, ver e editar texto.
+  * Preview: WebView (local para HTML ou URL do túnel para o resto).
+  * GitHub: conectar conta, escolher repo, clonar no servidor, commit + push.
+  * Conexão: URL base + basic auth (`OPENCODE_SERVER_PASSWORD`).
+* **Servidor** — o wizard do `setup-app/` embutido: pilota o Termux,
+  instala e liga o `serve` no próprio aparelho.
+* Código do modo servidor vive em módulo compartilhado (`setup-core`)
+  para não duplicar com o `setup-app/` standalone atual.
 
 ### Rede (sem abrir porta)
 
