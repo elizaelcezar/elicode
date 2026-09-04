@@ -48,8 +48,24 @@ public final class TermuxBridge {
         PendingIntent pi = PendingIntent.getBroadcast(ctx, requestId, result, piFlags);
         i.putExtra(EX_PENDING, pi);
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) ctx.startForegroundService(i);
-        else ctx.startService(i);
+        // foregroundService primeiro; se o sistema barrar, tenta startService.
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) ctx.startForegroundService(i);
+            else ctx.startService(i);
+        } catch (IllegalStateException e1) {
+            try {
+                ctx.startService(i);
+            } catch (Exception e2) {
+                throw new RuntimeException(firstLine(e2) + " / antes: " + firstLine(e1));
+            }
+        }
+    }
+
+    private static String firstLine(Exception e) {
+        if (e == null) return "?";
+        String m = e.toString();
+        int nl = m.indexOf('\n');
+        return nl > 0 ? m.substring(0, nl) : m;
     }
 
     public static boolean isInstalled(Context ctx, String pkg) {
