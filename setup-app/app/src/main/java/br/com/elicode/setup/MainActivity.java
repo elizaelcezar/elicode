@@ -29,7 +29,7 @@ import java.util.Locale;
 public class MainActivity extends Activity {
 
     private TextView tvChecks, tvLog, tvCreds;
-    private Button btnStart, btnHealth, btnBattery;
+    private Button btnStart, btnHealth, btnBattery, btnTermux, btnBoot;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final StringBuilder log = new StringBuilder();
 
@@ -50,6 +50,8 @@ public class MainActivity extends Activity {
         btnStart = findViewById(R.id.btn_start);
         btnHealth = findViewById(R.id.btn_health);
         btnBattery = findViewById(R.id.btn_fix_battery);
+        btnTermux = findViewById(R.id.btn_install_termux);
+        btnBoot = findViewById(R.id.btn_install_boot);
 
         SharedPreferences p = getSharedPreferences("elicode_setup", MODE_PRIVATE);
         pairPassword = p.getString("pair_password", "");
@@ -66,6 +68,8 @@ public class MainActivity extends Activity {
         findViewById(R.id.btn_console).setOnClickListener(v ->
                 startActivity(new Intent(this, ConsoleActivity.class)));
         btnBattery.setOnClickListener(v -> requestBatteryOff());
+        btnTermux.setOnClickListener(v -> openFdroid("com.termux"));
+        btnBoot.setOnClickListener(v -> openFdroid("com.termux.boot"));
     }
 
     @Override
@@ -92,7 +96,25 @@ public class MainActivity extends Activity {
         sb.append(check(battOk, "Bateria liberada p/ o Termux"));
         tvChecks.setText(sb.toString());
         btnBattery.setVisibility(battOk ? View.GONE : View.VISIBLE);
+        btnTermux.setVisibility(termux ? View.GONE : View.VISIBLE);
+        btnBoot.setVisibility(boot ? View.GONE : View.VISIBLE);
         btnStart.setEnabled(termux && x64);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // Volta da loja com o app instalado: recheca sem precisar reiniciar.
+        if (!running) refreshChecks();
+    }
+
+    private void openFdroid(String pkg) {
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW,
+                    Uri.parse("https://f-droid.org/packages/" + pkg)));
+        } catch (Exception e) {
+            Toast.makeText(this, "Abra o F-Droid e busque por " + pkg, Toast.LENGTH_LONG).show();
+        }
     }
 
     private String check(boolean ok, String label) {
