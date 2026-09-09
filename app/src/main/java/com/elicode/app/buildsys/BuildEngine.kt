@@ -95,6 +95,26 @@ class BuildEngine(private val context: Context, private val runtime: RuntimeMana
         projectDir: File, listener: ProcessListener?, extraArgs: String = ""
     ): EliResult<Pair<String, EliProcess>> = assemble(projectDir, "assembleDebug", listener, extraArgs)
 
+    /**
+     * Runs the project's unit tests in the guest (`<gradle> test` covers
+     * every module). Used by the Config tab one-tap test runner — output
+     * is parsed by [TestLogParser] for the copy-paste report.
+     */
+    fun runUnitTests(
+        projectDir: File, listener: ProcessListener?, extraArgs: String = ""
+    ): EliResult<Pair<String, EliProcess>> {
+        val info = detectGradle(projectDir)
+        if (info is EliResult.Err) return info
+        val cmd = (info as EliResult.Ok).value.command
+        val args = if (extraArgs.isBlank()) "" else " $extraArgs"
+        return runtime.startGuestTracked(
+            bashCmd = "$cmd test --console=plain$args",
+            projectDir = projectDir,
+            label = "gradle-test",
+            listener = listener
+        )
+    }
+
     fun bundleRelease(
         projectDir: File, listener: ProcessListener?, extraArgs: String = ""
     ): EliResult<Pair<String, EliProcess>> = assemble(projectDir, "bundleRelease", listener, extraArgs)
