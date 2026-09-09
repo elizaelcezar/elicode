@@ -17,18 +17,19 @@ class ProotLinkerTest {
 
     @Test
     fun linkerArgvShape() {
+        // Bionic takes no flags: [linker, program, args...], libs via env.
         val argv = ProotLauncher.linkerArgv(
-            "/system/bin/linker64", "/lib", "/proot",
+            "/system/bin/linker64", "/proot",
             listOf("-r", "rootfs", "/bin/bash")
         )
         assertEquals(
             listOf(
-                "/system/bin/linker64", "--library-path", "/lib", "/proot",
+                "/system/bin/linker64", "/proot",
                 "-r", "rootfs", "/bin/bash"
             ),
             argv
         )
-        assertTrue(argv[3].endsWith("proot"))
+        assertTrue(argv[1].endsWith("proot"))
     }
 
     @Test

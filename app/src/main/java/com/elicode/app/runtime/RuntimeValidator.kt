@@ -93,10 +93,7 @@ class RuntimeValidator(context: Context, private val paths: RuntimePaths) {
         val argv = if (paths.useLinker()) {
             val arch = ArchSupport.selectArch(Build.SUPPORTED_ABIS?.toList().orEmpty())
             val linker = ProotLauncher.systemLinker(arch.ifBlank { ArchSupport.ARM64 })
-            listOf(
-                linker.absolutePath, "--library-path",
-                paths.toolsLib.absolutePath, bin.absolutePath, "--version"
-            )
+            listOf(linker.absolutePath, bin.absolutePath, "--version")
         } else {
             listOf(bin.absolutePath, "--version")
         }

@@ -36,11 +36,13 @@ object ProotLauncher {
 
     /**
      * Prefixes a proot argv with an explicit linker invocation:
-     * [linker, --library-path, lib, proot, args...]. Pure function —
-     * unit-tested (ProotLinkerTest).
+     * [linker, proot, args...]. NOTE: bionic (Android's libc) takes no
+     * flags here — library lookup goes through LD_LIBRARY_PATH env
+     * (glibc's --library-path makes the linker abort with
+     * "expected absolute path"). Pure function — unit-tested.
      */
-    fun linkerArgv(linker: String, toolsLib: String, prootBin: String, rest: List<String>): List<String> =
-        listOf(linker, "--library-path", toolsLib, prootBin) + rest
+    fun linkerArgv(linker: String, prootBin: String, rest: List<String>): List<String> =
+        listOf(linker, prootBin) + rest
 
     /**
      * Picks the proot invocation mode from probe results, cheapest
@@ -128,7 +130,6 @@ object ProotLauncher {
             val linker = systemLinker(arch.ifBlank { ArchSupport.ARM64 })
             argv += linkerArgv(
                 linker.absolutePath,
-                paths.toolsLib.absolutePath,
                 prootArgs.removeAt(0),
                 prootArgs
             )

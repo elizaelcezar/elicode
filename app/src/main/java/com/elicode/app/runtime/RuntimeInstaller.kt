@@ -340,7 +340,7 @@ class RuntimeInstaller(
         if (directOut == null) {
             stage(listener, "proot-test", 0.2f, "Direct exec denied — trying system linker…")
             val (o, e) = probe(
-                listOf(linker.absolutePath, "--library-path", lib, bin, "--version"),
+                listOf(linker.absolutePath, bin, "--version"),
                 "proot --version (linker)"
             )
             filesOut = o
@@ -352,7 +352,7 @@ class RuntimeInstaller(
         if (directOut == null && filesOut == null && so.isFile) {
             stage(listener, "proot-test", 0.2f, "Linker denied too — trying APK-bundled proot…")
             val (o, e) = probe(
-                listOf(linker.absolutePath, "--library-path", lib, so.absolutePath, "--version"),
+                listOf(linker.absolutePath, so.absolutePath, "--version"),
                 "proot --version (bundled)"
             )
             soOut = o
@@ -390,6 +390,10 @@ class RuntimeInstaller(
         appendLine(
             "exec-diagnostics: exists=${f.isFile} size=${f.length()} " +
                 "read=${f.canRead()} write=${f.canWrite()} exec=${f.canExecute()}"
+        )
+        val so = paths.bundledProot
+        appendLine(
+            "bundled-proot: dir=${so.parent} exists=${so.isFile} size=${so.length()}"
         )
         appendLine(
             "selinux-enforce: " + runCatching {
