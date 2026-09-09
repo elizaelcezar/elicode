@@ -27,4 +27,4 @@ Known honest limitations (shown in-app, not hidden):
 - No true PTY yet: `vim`, `htop`, sudo-password prompts don't work in the
   terminal; use the editor + non-interactive commands.
 - First Gradle/Node builds need network (dependency downloads).
-- x86 emulators unsupported (ARM64 runtime).
+- x86_64 emulators supported (amd64 rootfs, manifest v2, auto-selected by ABI); 32-bit ABIs (armeabi-v7a, x86) remain unsupported.
