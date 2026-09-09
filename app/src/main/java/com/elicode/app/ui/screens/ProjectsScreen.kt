@@ -87,7 +87,11 @@ fun ProjectsScreen(graph: AppGraph, onOpenProject: () -> Unit) {
     fun reload() {
         loading = true
         scope.launch(Dispatchers.IO) {
-            val list = graph.projects.list().map { info ->
+            val seen = LinkedHashSet<String>()
+            val list = graph.projects.list().mapNotNull { info ->
+                // Duplicate ids corrupt LazyColumn keys and crash Compose
+                // on a later frame (Stack.pop) — drop them, keep first.
+                if (!seen.add(info.id)) return@mapNotNull null
                 val dir = File(info.path)
                 if (dir.isDirectory) {
                     val det = ProjectDetector.detect(dir)

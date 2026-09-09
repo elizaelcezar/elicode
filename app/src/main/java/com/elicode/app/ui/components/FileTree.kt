@@ -72,8 +72,14 @@ fun FileTree(
                 Icon(Icons.Default.CreateNewFolder, contentDescription = "New folder")
             }
         }
+        // Computed once per inputs and never throwing: filesystem walks
+        // during composition must not abort it (a mid-group abort
+        // surfaces later as a Composer stack crash).
+        val rows = remember(root.absolutePath, tick, nonce) {
+            runCatching { treeRows(root, expanded) }.getOrDefault(emptyList())
+        }
         LazyColumn(Modifier.weight(1f, fill = false)) {
-            items(treeRows(root, expanded)) { row ->
+            items(rows) { row ->
                 TreeRowView(
                     row = row,
                     onToggle = {
@@ -120,7 +126,13 @@ private data class TreeRow(val file: File, val depth: Int, val isDir: Boolean)
 
 private fun treeRows(root: File, expanded: Map<String, Boolean>): List<TreeRow> {
     val out = mutableListOf<TreeRow>()
+    val seen = HashSet<String>()
     fun walk(dir: File, depth: Int) {
+        if (depth > 32) return
+        // Symlink loops (dir link pointing at an ancestor) would recurse
+        // forever and kill composition with a StackOverflow.
+        val key = runCatching { dir.canonicalPath }.getOrNull() ?: dir.absolutePath
+        if (!seen.add(key)) return
         FileManager.listChildren(dir).forEach { f ->
             // Hide noise.
             if (f.name == ".git" || f.name == "build" || f.name == ".gradle" || f.name == "node_modules") {
