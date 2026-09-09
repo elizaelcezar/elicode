@@ -35,9 +35,8 @@ class SetupPlanTest {
         assertEquals(SetupOrchestrator.State.SKIPPED, byId["android"]!!.state)
     }
 
-    @Test
-    fun fullyInstalledSkipsAll() {
-        val steps = SetupOrchestrator.planSteps(
+        @Test
+    fun fullyInstalledSkipsAll() {        val steps = SetupOrchestrator.planSteps(
             SetupOrchestrator.InstallState(
                 runtimeInstalled = true,
                 nodeVersion = "v20.11.0",
@@ -46,5 +45,15 @@ class SetupPlanTest {
             )
         )
         assertTrue(steps.all { it.state == SetupOrchestrator.State.SKIPPED })
+    }
+
+    @Test
+    fun stagedScriptsNeverCarryCR() {
+        assertEquals(
+            "#!/bin/bash\nset -euo pipefail\n",
+            SetupOrchestrator.normalizeLineEndings("#!/bin/bash\r\nset -euo pipefail\r\n")
+        )
+        assertEquals("a\nb\n", SetupOrchestrator.normalizeLineEndings("a\rb\n"))
+        assertEquals("plain\n", SetupOrchestrator.normalizeLineEndings("plain\n"))
     }
 }

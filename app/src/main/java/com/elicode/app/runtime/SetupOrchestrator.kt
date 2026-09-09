@@ -46,6 +46,15 @@ class SetupOrchestrator(
         const val OPENCODE = "opencode"
         const val ANDROID = "android"
 
+        /**
+         * Guest shells (bash/dash) choke on CRLF: `set -euo pipefail`
+         * becomes `pipefail\r`. Windows checkouts produce CRLF
+         * assets, so staging normalizes line endings. Pure —
+         * unit-tested.
+         */
+        fun normalizeLineEndings(text: String): String =
+            text.replace("\r\n", "\n").replace("\r", "\n")
+
         fun defaultSteps(): List<Step> = listOf(
             Step(RUNTIME, "Linux (Ubuntu + PRoot)"),
             Step(NODE, "Node.js 20 LTS"),
@@ -244,7 +253,9 @@ class SetupOrchestrator(
         val name = "elicode-" + File(asset).name
         val dst = File(runtime.paths.tmp, name)
         context.assets.open(asset).use { input ->
-            dst.outputStream().use { output -> input.copyTo(output) }
+            // Never stage CRLF into the guest (see normalizeLineEndings).
+            val text = normalizeLineEndings(input.bufferedReader().readText())
+            dst.writeText(text)
         }
         return name
     }

@@ -1,0 +1,8 @@
+# EliCode line-ending rules.
+#
+# Shell assets are staged into the Ubuntu guest and executed by
+# bash/dash, which choke on CRLF (`pipefail\r`). Force LF so Windows
+# checkouts (core.autocrlf=true) can never poison the APK.
+*.sh text eol=lf
+# Windows batch files need CRLF.
+*.bat text eol=crlf
