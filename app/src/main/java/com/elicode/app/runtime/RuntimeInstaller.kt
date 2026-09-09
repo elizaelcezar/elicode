@@ -337,7 +337,6 @@ class RuntimeInstaller(private val context: Context, val paths: RuntimePaths) {
         stageDir.walkTopDown()
             .filter { it.isFile && (it.name.endsWith(".so") || ".so." in it.name) }
             .forEach { so -> so.copyTo(File(paths.toolsLib, so.name), overwrite = true) }
-        paths.toolsLib.walkTopDown().forEach { runCatching { } }
     }
 
     private fun configureRootfs() {

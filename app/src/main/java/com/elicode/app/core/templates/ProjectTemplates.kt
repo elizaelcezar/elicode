@@ -89,9 +89,9 @@ object Templates {
             "gradlew" to
                 "#!/bin/sh\n# Gradle wrapper stub: the EliCode runtime setup installs the wrapper jar.\n" +
                 "# Falls back to a system-wide gradle when present.\n" +
-                "if [ -f \"\\$(dirname \"\\$0\")/gradle/wrapper/gradle-wrapper.jar\" ]; then\n" +
-                "  exec java -jar \"\\$(dirname \"\\$0\")/gradle/wrapper/gradle-wrapper.jar\" \"\\$@\"\n" +
-                "elif command -v gradle >/dev/null 2>&1; then\n  exec gradle \"\\$@\"\n" +
+                "if [ -f \"\$(dirname \"\$0\")/gradle/wrapper/gradle-wrapper.jar\" ]; then\n" +
+                "  exec java -jar \"\$(dirname \"\$0\")/gradle/wrapper/gradle-wrapper.jar\" \"\$@\"\n" +
+                "elif command -v gradle >/dev/null 2>&1; then\n  exec gradle \"\$@\"\n" +
                 "else\n  echo \"Gradle not found. Install it in the EliCode runtime first.\" >&2\n  exit 1\nfi\n",
             "app/build.gradle" to
                 "plugins {\n    id(\"com.android.application\")\n    id(\"org.jetbrains.kotlin.android\")\n}\n\n" +
