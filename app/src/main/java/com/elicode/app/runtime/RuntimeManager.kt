@@ -198,7 +198,7 @@ class RuntimeManager(
             )
         }
         val (binds, work) = guestWork(projectDir)
-        val launch = ProotLauncher.execLaunch(paths, listOf(bashCmd), work, binds)
+        val launch = ProotLauncher.execLaunch(paths, listOf(bashCmd), work, binds, paths.useLinker())
         return Execs.run(runner, launch.argv, null, launch.env, "guest exec", timeoutMs)
     }
 
@@ -233,7 +233,7 @@ class RuntimeManager(
             )
         }
         val (binds, work) = guestWork(projectDir)
-        val launch = ProotLauncher.tuiLaunch(paths, listOf("opencode"), work, binds)
+        val launch = ProotLauncher.tuiLaunch(paths, listOf("opencode"), work, binds, paths.useLinker())
         val proc = interactiveRunner.start(launch.argv, null, launch.env, "opencode", listener)
         return EliResult.Ok(registry.register(proc) to proc)
     }
@@ -248,7 +248,7 @@ class RuntimeManager(
     ): Pair<String, EliProcess> {
         val proc: EliProcess = if (isInstalled()) {
             val (binds, work) = guestWork(projectDir)
-            val launch = ProotLauncher.shellLaunch(paths, work, binds)
+            val launch = ProotLauncher.shellLaunch(paths, work, binds, paths.useLinker())
             interactiveRunner.start(launch.argv, null, launch.env, "ubuntu-bash", listener)
         } else {
             interactiveRunner.start(
@@ -286,7 +286,7 @@ class RuntimeManager(
             )
         }
         val (binds, work) = guestWork(projectDir)
-        val launch = ProotLauncher.execLaunch(paths, listOf(bashCmd), work, binds)
+        val launch = ProotLauncher.execLaunch(paths, listOf(bashCmd), work, binds, paths.useLinker())
         val proc = runner.start(launch.argv, null, launch.env, label, listener)
         return EliResult.Ok(registry.register(proc) to proc)
     }

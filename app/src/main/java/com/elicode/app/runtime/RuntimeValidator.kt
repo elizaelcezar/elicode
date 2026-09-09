@@ -34,7 +34,9 @@ class RuntimeValidator(context: Context, private val paths: RuntimePaths) {
         val elfOk = elf == ArchiveExtractor.EM_AARCH64 || elf == ArchiveExtractor.EM_X86_64
         out += Check(
             "proot-binary", paths.prootBin.isFile && elfOk,
-            "ELF machine=$elf (want 183/arm64 or 62/x86_64), size=${paths.prootBin.length()}"
+            "ELF machine=$elf (want 183/arm64 or 62/x86_64), " +
+                "size=${paths.prootBin.length()}, exec=${paths.prootBin.canExecute()}, " +
+                "linker=${paths.useLinker()}"
         )
         out += Check(
             "proot-runs",
@@ -86,9 +88,19 @@ class RuntimeValidator(context: Context, private val paths: RuntimePaths) {
 
     private fun prootVersion(): String {
         if (!paths.prootBin.isFile) return ""
+        val argv = if (paths.useLinker()) {
+            val arch = ArchSupport.selectArch(Build.SUPPORTED_ABIS?.toList().orEmpty())
+            val linker = ProotLauncher.systemLinker(arch.ifBlank { ArchSupport.ARM64 })
+            listOf(
+                linker.absolutePath, "--library-path",
+                paths.toolsLib.absolutePath, paths.prootBin.absolutePath, "--version"
+            )
+        } else {
+            listOf(paths.prootBin.absolutePath, "--version")
+        }
         val r = Execs.run(
             runner,
-            listOf(paths.prootBin.absolutePath, "--version"),
+            argv,
             null,
             mapOf("LD_LIBRARY_PATH" to paths.toolsLib.absolutePath),
             "proot --version", 30_000L
@@ -99,7 +111,7 @@ class RuntimeValidator(context: Context, private val paths: RuntimePaths) {
 
     private fun guestEcho(): String {
         return try {
-            val launch = ProotLauncher.execLaunch(paths, listOf("echo", "elicode-ok"))
+            val launch = ProotLauncher.execLaunch(paths, listOf("echo", "elicode-ok"), useLinker = paths.useLinker())
             val r = Execs.run(runner, launch.argv, null, launch.env, "guest echo", 60_000L)
             val ok = r as? EliResult.Ok ?: return ""
             if (ok.value.exitCode == 0) ok.value.stdout.trim() else ""
@@ -108,8 +120,12 @@ class RuntimeValidator(context: Context, private val paths: RuntimePaths) {
         }
     }
 
-    private fun guestToolVersion(tool: String): String? {        return try {
-            val launch = ProotLauncher.execLaunch(paths, listOf("command", "-v", tool, "&&", tool, "--version"))
+    private fun guestToolVersion(tool: String): String? {
+        return try {
+            val launch = ProotLauncher.execLaunch(
+                paths, listOf("command", "-v", tool, "&&", tool, "--version"),
+                useLinker = paths.useLinker()
+            )
             val r = Execs.run(runner, launch.argv, null, launch.env, "probe $tool", 60_000L)
             val ok = r as? EliResult.Ok ?: return null
             if (ok.value.exitCode != 0) return null

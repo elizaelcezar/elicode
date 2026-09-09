@@ -20,11 +20,34 @@ object ProotLauncher {
         val env: Map<String, String>
     )
 
+    /**
+     * System dynamic linker for this arch (arm64/x86_64 → linker64).
+     * Invoking PRoot *through* the linker only needs READ permission on
+     * the binary — the escape hatch for devices that deny exec on
+     * app-private files (error=13, Permission denied).
+     */
+    fun linkerName(arch: String): String =
+        if (arch == ArchSupport.X86_64 || arch == ArchSupport.ARM64) "linker64" else "linker"
+
+    fun systemLinker(arch: String): File {
+        val direct = File("/system/bin/" + linkerName(arch))
+        return if (direct.isFile) direct else File(linkerName(arch))
+    }
+
+    /**
+     * Prefixes a proot argv with an explicit linker invocation:
+     * [linker, --library-path, lib, proot, args...]. Pure function —
+     * unit-tested (ProotLinkerTest).
+     */
+    fun linkerArgv(linker: String, toolsLib: String, prootBin: String, rest: List<String>): List<String> =
+        listOf(linker, "--library-path", toolsLib, prootBin) + rest
+
     fun shellLaunch(
         paths: RuntimePaths,
         workDirInGuest: String = "/projects",
-        extraBinds: List<Pair<File, String>> = emptyList()
-    ): Launch = build(paths, workDirInGuest, extraBinds, listOf("/bin/bash", "--login"))
+        extraBinds: List<Pair<File, String>> = emptyList(),
+        useLinker: Boolean = false
+    ): Launch = build(paths, workDirInGuest, extraBinds, listOf("/bin/bash", "--login"), useLinker)
 
     /**
      * Fullscreen/interactive guest program (e.g. `opencode` TUI) on the
@@ -35,47 +58,66 @@ object ProotLauncher {
         paths: RuntimePaths,
         guestCmd: List<String>,
         workDirInGuest: String = "/projects",
-        extraBinds: List<Pair<File, String>> = emptyList()
+        extraBinds: List<Pair<File, String>> = emptyList(),
+        useLinker: Boolean = false
     ): Launch = build(
         paths, workDirInGuest, extraBinds,
-        listOf("/bin/bash", "--login", "-c", "exec " + guestCmd.joinToString(" "))
+        listOf("/bin/bash", "--login", "-c", "exec " + guestCmd.joinToString(" ")),
+        useLinker
     )
 
     fun execLaunch(
         paths: RuntimePaths,
         guestCmd: List<String>,
         workDirInGuest: String = "/projects",
-        extraBinds: List<Pair<File, String>> = emptyList()
-    ): Launch = build(paths, workDirInGuest, extraBinds, listOf("/bin/bash", "--login", "-c", guestCmd.joinToString(" ")))
+        extraBinds: List<Pair<File, String>> = emptyList(),
+        useLinker: Boolean = false
+    ): Launch = build(paths, workDirInGuest, extraBinds, listOf("/bin/bash", "--login", "-c", guestCmd.joinToString(" ")), useLinker)
 
     private fun build(
         paths: RuntimePaths,
         workDirInGuest: String,
         extraBinds: List<Pair<File, String>>,
-        guest: List<String>
+        guest: List<String>,
+        useLinker: Boolean = false
     ): Launch {
         require(paths.prootBin.isFile) { "PRoot binary missing: ${paths.prootBin.absolutePath}" }
         require(paths.rootfs.isDirectory) { "Ubuntu rootfs missing: ${paths.rootfs.absolutePath}" }
         val argv = mutableListOf<String>()
-        argv += paths.prootBin.absolutePath
-        argv += "-r"; argv += paths.rootfs.absolutePath
-        argv += "-0" // fake root inside guest
-        argv += "--kernel-release=$KERNEL_RELEASE"
+        val prootArgs = mutableListOf<String>()
+        prootArgs += paths.prootBin.absolutePath
+        prootArgs += "-r"; prootArgs += paths.rootfs.absolutePath
+        prootArgs += "-0" // fake root inside guest
+        prootArgs += "--kernel-release=$KERNEL_RELEASE"
         // Essential pseudo-filesystems.
-        argv += "-b"; argv += "/dev"
-        argv += "-b"; argv += "/proc"
-        argv += "-b"; argv += "/sys"
+        prootArgs += "-b"; prootArgs += "/dev"
+        prootArgs += "-b"; prootArgs += "/proc"
+        prootArgs += "-b"; prootArgs += "/sys"
         // Writable homes/scratch.
-        argv += "-b"; argv += "${paths.home.absolutePath}:/root"
-        argv += "-b"; argv += "${paths.tmp.absolutePath}:/tmp"
+        prootArgs += "-b"; prootArgs += "${paths.home.absolutePath}:/root"
+        prootArgs += "-b"; prootArgs += "${paths.tmp.absolutePath}:/tmp"
         // Projects visible at a stable guest path.
-        argv += "-b"; argv += "${paths.projects.absolutePath}:/projects"
+        prootArgs += "-b"; prootArgs += "${paths.projects.absolutePath}:/projects"
         extraBinds.forEach { (host, guestPath) ->
             host.mkdirs()
-            argv += "-b"; argv += "${host.absolutePath}:$guestPath"
+            prootArgs += "-b"; prootArgs += "${host.absolutePath}:$guestPath"
         }
-        argv += "-w"; argv += workDirInGuest
-        argv += guest
+        prootArgs += "-w"; prootArgs += workDirInGuest
+        prootArgs += guest
+        if (useLinker) {
+            val arch = ArchSupport.selectArch(
+                android.os.Build.SUPPORTED_ABIS?.toList().orEmpty()
+            )
+            val linker = systemLinker(arch.ifBlank { ArchSupport.ARM64 })
+            argv += linkerArgv(
+                linker.absolutePath,
+                paths.toolsLib.absolutePath,
+                prootArgs.removeAt(0),
+                prootArgs
+            )
+        } else {
+            argv += prootArgs
+        }
         val env = mapOf(
             "LD_LIBRARY_PATH" to paths.toolsLib.absolutePath,
             "PROOT_TMPDIR" to paths.tmp.absolutePath,

@@ -37,6 +37,20 @@ class RuntimePaths(context: Context) {
     val versionFile: File = File(runtime, "version.json")
     val projects: File = File(base, "projects").apply { mkdirs() }
     val cache: File = File(base, "cache").apply { mkdirs() }
+    private val linkerModeFile: File = File(runtime, "linker-mode")
+
+    /**
+     * True when this device denies direct exec of the PRoot binary
+     * (error=13) and every launch must go through the system linker
+     * (read-only workaround). Set by the installer's proot smoke test.
+     */
+    fun useLinker(): Boolean =
+        runCatching { linkerModeFile.isFile && linkerModeFile.readText().trim() == "1" }
+            .getOrDefault(false)
+
+    fun writeLinkerMode(use: Boolean) {
+        runCatching { linkerModeFile.writeText(if (use) "1" else "0") }
+    }
 
     fun installedVersion(): Int {
         if (!versionFile.isFile) return 0

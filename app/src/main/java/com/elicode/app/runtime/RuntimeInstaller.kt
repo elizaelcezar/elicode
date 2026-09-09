@@ -169,27 +169,7 @@ class RuntimeInstaller(
                 )
             }
             paths.prootBin.setExecutable(true, false)
-            stage(listener, "proot-test", 0.2f, "Testing PRoot…")
-            val ver = Execs.run(
-                runner,
-                listOf(paths.prootBin.absolutePath, "--version"),
-                null,
-                mapOf("LD_LIBRARY_PATH" to paths.toolsLib.absolutePath),
-                "proot --version",
-                30_000L
-            )
-            val verOut = (ver as? EliResult.Ok)?.value?.combined.orEmpty()
-            if (ver !is EliResult.Ok || !verOut.contains("proot", ignoreCase = true)) {
-                throw InstallFail(
-                    EliError(
-                        operation = "Test PRoot",
-                        command = "${paths.prootBin.absolutePath} --version",
-                        message = (ver as? EliResult.Err)?.error?.format() ?: verOut,
-                        probableCause = "PRoot cannot execute (missing libs or kernel restriction).",
-                        suggestedFix = "Open Diagnostics and check the Installer log, then use Repair."
-                    )
-                )
-            }
+            testProot(listener, arch)
 
             // ---- Ubuntu rootfs ----
             checkCancel()
@@ -271,6 +251,8 @@ class RuntimeInstaller(
             }
             installProotFromStage(stageDir)
             paths.prootBin.setExecutable(true, false)
+            val arch = ArchSupport.selectArch(Build.SUPPORTED_ABIS?.toList().orEmpty())
+            testProot(listener, arch)
             val tgzVerified = fetchVerified(cfg.rootfs, listener, "repair")
             runExtract("Extract ${tgzVerified.name}", tgzVerified) {
                 paths.rootfs.deleteRecursively()
@@ -320,6 +302,83 @@ class RuntimeInstaller(
     // ---------------- internals ----------------
 
     private class InstallFail(val error: EliError) : Exception(error.format())
+
+    /**
+     * Smoke-tests PRoot. When the device denies direct exec (error=13),
+     * falls back to an explicit system-linker invocation (read-only) and
+     * persists linker mode for all future launches on this device.
+     */
+    private fun testProot(listener: Listener, arch: String): String {
+        val bin = paths.prootBin.absolutePath
+        val lib = paths.toolsLib.absolutePath
+        val chmodOk = paths.prootBin.setExecutable(true, false)
+        stage(
+            listener, "proot-test", 0.2f,
+            "Testing PRoot… (chmod +x ${if (chmodOk) "ok" else "FAILED"})"
+        )
+        val direct = Execs.run(
+            runner, listOf(bin, "--version"), null,
+            mapOf("LD_LIBRARY_PATH" to lib), "proot --version", 30_000L
+        )
+        val directOut = (direct as? EliResult.Ok)?.value?.combined.orEmpty()
+        if (direct is EliResult.Ok && directOut.contains("proot", ignoreCase = true)) {
+            paths.writeLinkerMode(false)
+            return directOut
+        }
+        val directErr = (direct as? EliResult.Err)?.error
+        val denied = directErr?.message?.contains("Permission denied", ignoreCase = true) == true ||
+            directErr?.message?.contains("error=13") == true
+        if (denied) {
+            stage(listener, "proot-test", 0.2f, "Direct exec denied — trying system linker…")
+            val linker = ProotLauncher.systemLinker(arch.ifBlank { ArchSupport.ARM64 })
+            val via = Execs.run(
+                runner,
+                listOf(linker.absolutePath, "--library-path", lib, bin, "--version"),
+                null, mapOf("LD_LIBRARY_PATH" to lib), "proot --version (linker)", 30_000L
+            )
+            val viaOut = (via as? EliResult.Ok)?.value?.combined.orEmpty()
+            if (via is EliResult.Ok && viaOut.contains("proot", ignoreCase = true)) {
+                paths.writeLinkerMode(true)
+                stage(listener, "proot-test", 0.2f, "Linker mode enabled for this device.")
+                return viaOut
+            }
+        }
+        throw InstallFail(
+            EliError(
+                operation = "Test PRoot",
+                command = "$bin --version",
+                message = ((direct as? EliResult.Err)?.error?.format() ?: directOut) +
+                    "\n" + execDiagnostics(),
+                probableCause = "PRoot cannot execute (missing libs or kernel restriction).",
+                suggestedFix = "Diagnostics → Copiar diagnóstico and share the log."
+            )
+        )
+    }
+
+    /** Gathers exec-denial evidence: permissions, SELinux, mount flags. */
+    private fun execDiagnostics(): String = buildString {
+        val f = paths.prootBin
+        appendLine(
+            "exec-diagnostics: exists=${f.isFile} size=${f.length()} " +
+                "read=${f.canRead()} write=${f.canWrite()} exec=${f.canExecute()}"
+        )
+        appendLine(
+            "selinux-enforce: " + runCatching {
+                File("/sys/fs/selinux/enforce").readText().trim()
+            }.getOrDefault("?") + " (1=enforcing)"
+        )
+        appendLine(
+            "mount: " + runCatching {
+                val dir = context.filesDir.absolutePath
+                File("/proc/mounts").readLines().mapNotNull { line ->
+                    val parts = line.split(" ")
+                    if (parts.size >= 4 && dir.startsWith(parts[1])) {
+                        parts[1] + " " + parts[2] + " " + parts[3]
+                    } else null
+                }.maxByOrNull { it.length }
+            }.getOrDefault("?")
+        )
+    }
 
     private fun checkCancel() {
         if (cancelled.get()) throw InterruptedException("cancelled")
