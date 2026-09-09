@@ -38,6 +38,74 @@ class PreviewEngine(private val runtime: RuntimeManager) {
     private val output = StringBuilder()
     @Volatile private var detectPort: Int = -1
 
+    // ---- live reload: file watcher ----
+
+    private val _lastChange = MutableStateFlow(0L)
+    /** Epoch-ms of the last detected project file change (0 = none yet). */
+    val lastChange: StateFlow<Long> = _lastChange
+
+    @Volatile private var watching = false
+    private var watchThread: Thread? = null
+
+    companion object {
+        private val IGNORED_DIRS = setOf(".git", "node_modules", "build", ".gradle", "__pycache__", ".cxx")
+
+        /**
+         * Cheap project fingerprint: relative path + mtime + size over a
+         * capped file set. Pure function — unit-tested (PreviewWatchTest).
+         */
+        fun fingerprint(dir: File, maxFiles: Int = 3000): Long {
+            if (!dir.isDirectory) return 0L
+            var h = 17L
+            var count = 0
+            val stack = ArrayDeque<Pair<File, Int>>()
+            stack.addLast(dir to 0)
+            while (stack.isNotEmpty() && count < maxFiles) {
+                val (d, depth) = stack.removeLast()
+                val kids = d.listFiles() ?: continue
+                for (f in kids) {
+                    if (f.isDirectory) {
+                        if (depth < 8 && f.name !in IGNORED_DIRS) stack.addLast(f to depth + 1)
+                    } else {
+                        h = h * 31 + f.relativeTo(dir).path.hashCode()
+                        h = h * 31 + f.lastModified()
+                        h = h * 31 + f.length()
+                        count++
+                        if (count >= maxFiles) break
+                    }
+                }
+            }
+            return h
+        }
+    }
+
+    private fun startWatch(dir: File) {
+        stopWatch()
+        watching = true
+        watchThread = Thread({
+            var last = fingerprint(dir)
+            while (watching) {
+                try {
+                    Thread.sleep(2000)
+                } catch (_: InterruptedException) {
+                    break
+                }
+                if (!watching) break
+                val now = runCatching { fingerprint(dir) }.getOrDefault(last)
+                if (now != last) {
+                    last = now
+                    _lastChange.value = System.currentTimeMillis()
+                }
+            }
+        }, "elic-preview-watch").apply { isDaemon = true; start() }
+    }
+
+    private fun stopWatch() {
+        watching = false
+        watchThread?.interrupt()
+        watchThread = null
+    }
+
     fun defaultCommand(type: ProjectType, port: Int): String = when (type) {
         ProjectType.VITE -> "npm install --no-audit --no-fund && npm run dev -- --host 0.0.0.0 --port $port"
         ProjectType.NEXTJS, ProjectType.REACT, ProjectType.NODE ->
@@ -77,6 +145,8 @@ class PreviewEngine(private val runtime: RuntimeManager) {
                 // Optimistic URL on the hint; corrected when the real port is sniffed.
                 val server = Server(id = pid, url = "http://127.0.0.1:$portHint", port = portHint, processId = pid)
                 _server.value = server
+                _lastChange.value = 0L
+                startWatch(projectDir)
                 EliResult.Ok(server)
             }
             is EliResult.Err -> EliResult.Err(
@@ -99,6 +169,7 @@ class PreviewEngine(private val runtime: RuntimeManager) {
     }
 
     fun stop() {
+        stopWatch()
         _server.value?.let { runCatching { runtime.registry.kill(it.processId) } }
         _server.value = null
     }

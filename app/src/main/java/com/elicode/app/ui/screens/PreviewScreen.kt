@@ -21,6 +21,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -49,6 +50,7 @@ fun PreviewScreen(graph: AppGraph) {
     val scope = rememberCoroutineScope()
     val project = graph.session.project
     val server by graph.preview.server.collectAsState()
+    val lastChange by graph.preview.lastChange.collectAsState()
     var command by remember(project?.path) { mutableStateOf("") }
     var portText by remember(project?.path) {
         mutableStateOf(
@@ -60,6 +62,15 @@ fun PreviewScreen(graph: AppGraph) {
     var starting by remember { mutableStateOf(false) }
     var webNonce by remember { mutableStateOf(0) }
     var webView by remember { mutableStateOf<WebView?>(null) }
+    var autoReload by remember { mutableStateOf(true) }
+
+    // Live preview: project file changes reload the WebView (debounced
+    // by the 2s watch poll; skipped while no server is running).
+    LaunchedEffect(lastChange) {
+        if (autoReload && lastChange > 0 && server != null && graph.preview.isRunning()) {
+            webView?.reload()
+        }
+    }
 
     Column(Modifier.fillMaxSize().padding(12.dp)) {
         Text("Preview", style = MaterialTheme.typography.headlineSmall)
@@ -122,6 +133,9 @@ fun PreviewScreen(graph: AppGraph) {
                         graph.preview.stop()
                         graph.logs.add("Preview", "server", "stopped")
                     }) { Text("Stop") }
+                }
+                OutlinedButton(onClick = { autoReload = !autoReload }) {
+                    Text(if (autoReload) "Live ✓" else "Live off")
                 }
             }
         }
