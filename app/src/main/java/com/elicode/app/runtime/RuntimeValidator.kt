@@ -71,16 +71,18 @@ class RuntimeValidator(
             }
         )
         val echo = guestEchoFull()
+        // Full stderr is diagnostics gold (e.g. the complete
+        // "can't chmod '<tmp>/proot-XXXXXX'" path); truncation hid it.
         log(
             "Runtime", "guest-probe",
-            "exit=${echo.exitCode} out='${echo.stdout.trim().take(300)}' " +
-                "err='${echo.stderr.trim().take(500)}'"
+            "exit=${echo.exitCode} out='${echo.stdout.trim().take(1000)}' " +
+                "err='${echo.stderr.trim().take(2000)}'"
         )
         out += guestLoaderCheck(arch)
         out += Check(
             "guest-bash", echo.stdout.trim() == "elicode-ok",
-            "exit=${echo.exitCode} out='${echo.stdout.trim().take(120)}' " +
-                "err='${echo.stderr.trim().take(200)}'"
+            "exit=${echo.exitCode} out='${echo.stdout.trim().take(300)}' " +
+                "err='${echo.stderr.trim().take(800)}'"
         )
         out += Check(
             "native-pty", NativeBridge.AVAILABLE,

@@ -55,7 +55,11 @@ Every launch exports `PROOT_LOADER` (+ `PROOT_LOADER_32`) pointing
 at the **effective** loader: the APK-bundled copy
 (`jniLibs/*/libproot_loader*.so`, extracted to the exec-allowed
 native-library dir) wins; the installer-extracted `tools/loader`
-is fallback. The Termux proot build defaults to
+is fallback. Launches also set `PROOT_NO_SECCOMP=1` (pure-ptrace
+mode): proot's seccomp accelerator breaks `chmod` of the loader
+transfer file (`can't chmod .../tmp/proot-XXXXXX`) on newer Android
+kernels, leaving the temp loader non-executable so guest exec fails
+with `Permission denied`. The Termux proot build defaults to
 `/data/data/com.termux/.../libexec/proot/loader`, which never exists
 under EliCode's app id — without the override, guest exec fails with
 `execve("/usr/bin/bash")` ENOENT ("the loader was not found") even

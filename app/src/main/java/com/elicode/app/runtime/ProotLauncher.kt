@@ -163,6 +163,12 @@ object ProotLauncher {
             "HOME" to "/root",
             "TERM" to "xterm-256color",
             "LANG" to "C.UTF-8",
+            // Pure-ptrace mode: proot's own seccomp filter breaks
+            // chmod of the loader transfer file on newer Android
+            // kernels ("can't chmod .../tmp/proot-XXXXXX" → the temp
+            // loader stays non-executable → guest execve fails with
+            // "Permission denied"). Costs speed, not correctness.
+            "PROOT_NO_SECCOMP" to "1",
             // Guest PATH: keep Ubuntu tools first.
             "PATH" to "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/node/bin"
         )

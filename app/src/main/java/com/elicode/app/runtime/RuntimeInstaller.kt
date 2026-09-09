@@ -183,6 +183,11 @@ class RuntimeInstaller(
 
             checkCancel()
             stage(listener, "verify", 0.9f, "Verifying runtime…")
+            log(
+                "Runtime", "verify",
+                "PROOT_LOADER=${paths.effectiveLoader().absolutePath} " +
+                    "(bundled=${paths.bundledLoader.isFile} tools=${paths.loaderBin.isFile})"
+            )
             val report = RuntimeValidator(context, paths, log).validateCore()
             val failed = report.filter { it.required && !it.ok }
             if (failed.isNotEmpty()) {
@@ -262,6 +267,11 @@ class RuntimeInstaller(
                 }
             }
             configureRootfs()
+            log(
+                "Runtime", "verify",
+                "PROOT_LOADER=${paths.effectiveLoader().absolutePath} " +
+                    "(bundled=${paths.bundledLoader.isFile} tools=${paths.loaderBin.isFile})"
+            )
             val report = RuntimeValidator(context, paths, log).validateCore()
             val failed = report.filter { it.required && !it.ok }
             if (failed.isNotEmpty()) {
