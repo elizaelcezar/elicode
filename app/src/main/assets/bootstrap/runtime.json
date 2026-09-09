@@ -1,0 +1,40 @@
+{
+  "_comment": "EliCode Linux runtime bootstrap manifest. URLs verified 2026-09-08. The installer tries 'url' first, then each entry of 'mirrors' in order. Keep HTTPS first: Android blocks cleartext (http) unless the app allows it.",
+  "version": 1,
+  "minFreeBytes": 1000000000,
+  "proot": {
+    "file": "proot_5.1.107.92_aarch64.deb",
+    "url": "https://packages.termux.org/apt/termux-main/pool/main/p/proot/proot_5.1.107.92_aarch64.deb",
+    "mirrors": [
+      "https://grimler.se/termux/termux-main/pool/main/p/proot/proot_5.1.107.92_aarch64.deb"
+    ],
+    "sha256": "1f1c983509701f6826f568482c70673ee453a9ba38c9f5fa445a472d6b7524e9",
+    "license": "GPL-2.0 (see THIRD_PARTY_NOTICES.md)"
+  },
+  "libtalloc": {
+    "file": "libtalloc_2.4.3_aarch64.deb",
+    "url": "https://packages.termux.org/apt/termux-main/pool/main/libt/libtalloc/libtalloc_2.4.3_aarch64.deb",
+    "mirrors": [
+      "https://grimler.se/termux/termux-main/pool/main/libt/libtalloc/libtalloc_2.4.3_aarch64.deb"
+    ],
+    "sha256": "ac81ad623d74c209718b9f3acb2dd702cc8a88c431e820d212229910b4db29da",
+    "license": "LGPL-3.0-or-later (see THIRD_PARTY_NOTICES.md)"
+  },
+  "libshmem": {
+    "file": "libandroid-shmem_0.7_aarch64.deb",
+    "url": "https://packages.termux.org/apt/termux-main/pool/main/liba/libandroid-shmem/libandroid-shmem_0.7_aarch64.deb",
+    "mirrors": [
+      "https://grimler.se/termux/termux-main/pool/main/liba/libandroid-shmem/libandroid-shmem_0.7_aarch64.deb"
+    ],
+    "sha256": "0da3a24d558b93c92bcf8d611e0826a99ff96e396b148e6cdf33b47c47c57ff6",
+    "license": "BSD-3-Clause (see THIRD_PARTY_NOTICES.md)"
+  },
+  "rootfs": {
+    "file": "ubuntu-base-22.04-base-arm64.tar.gz",
+    "url": "https://cdimage.ubuntu.com/ubuntu-base/releases/22.04/release/ubuntu-base-22.04-base-arm64.tar.gz",
+    "mirrors": [
+      "http://cdimage.ubuntu.com/ubuntu-base/releases/22.04/release/ubuntu-base-22.04-base-arm64.tar.gz"
+    ],
+    "sha256": "6dd67ec02fdc64b5bba4125066462d01e66a2ae14c4c9e571541fba617d7e721"
+  }
+}

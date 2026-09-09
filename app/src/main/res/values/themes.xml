@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.EliCode" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/elic_bg</item>
+        <item name="android:statusBarColor">@color/elic_bg</item>
+        <item name="android:navigationBarColor">@color/elic_bg</item>
+    </style>
+</resources>

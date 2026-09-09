@@ -1,0 +1,113 @@
+package com.elicode.app.runtime
+
+import android.content.Context
+import android.os.Build
+import com.elicode.app.core.EliResult
+import java.io.File
+
+/**
+ * Validates the installed runtime with real smoke tests.
+ * Core checks must ALL pass before the app reports "installed".
+ * Tool checks (git/node/java/...) are informational: missing tools
+ * map to optional toolchain installs, not to a broken runtime.
+ */
+class RuntimeValidator(context: Context, private val paths: RuntimePaths) {
+
+    data class Check(
+        val name: String,
+        val ok: Boolean,
+        val detail: String,
+        val required: Boolean = true
+    )
+
+    private val runner = JvmProcessRunner()
+
+    fun validateCore(): List<Check> {
+        val out = mutableListOf<Check>()
+        val abis = Build.SUPPORTED_ABIS?.toList().orEmpty()
+        out += Check(
+            "arch-arm64", abis.contains("arm64-v8a"),
+            "ABIs: ${abis.joinToString()}"
+        )
+        val elf = ArchiveExtractor.elfMachine(paths.prootBin)
+        out += Check(
+            "proot-binary", paths.prootBin.isFile && elf == ArchiveExtractor.EM_AARCH64,
+            "ELF machine=$elf (want 183), size=${paths.prootBin.length()}"
+        )
+        out += Check(
+            "proot-runs",
+            prootVersion().isNotBlank(),
+            prootVersion().ifBlank { "proot --version failed" }
+        )
+        val bash = File(paths.rootfs, "bin/bash")
+        val bashUsr = File(paths.rootfs, "usr/bin/bash")
+        // Ubuntu 22.04 uses merged-/usr: /bin is a symlink to usr/bin. Some
+        // devices fail to create symlinks on first extract, so accept the
+        // real path too instead of reporting a healthy rootfs as corrupt.
+        val bashOk = bash.isFile || bashUsr.isFile
+        out += Check(
+            "rootfs-bash", bashOk,
+            when {
+                bash.isFile -> "bin/bash present"
+                bashUsr.isFile -> "usr/bin/bash present (merged-/usr, /bin symlink missing)"
+                else -> "rootfs/bin/bash AND usr/bin/bash missing — rootfs incomplete"
+            }
+        )
+        val echo = guestEcho()
+        out += Check("guest-bash", echo == "elicode-ok", "bash echo -> '$echo'")
+        return out
+    }
+
+    fun validateTools(): List<Check> {
+        if (!isCoreOk()) return listOf(
+            Check("tools", false, "Runtime core not installed — install it first.", required = false)
+        )
+        return listOf("git", "node", "npm", "java", "python3", "gradle", "opencode").map { tool ->
+            val v = guestToolVersion(tool)
+            Check(tool, v != null, v ?: "not found in guest PATH", required = false)
+        }
+    }
+
+    fun isCoreOk(): Boolean = validateCore().all { !it.required || it.ok }
+
+    /** True when a previous install left a usable tree (even if unvalidated). */
+    fun hasPartialInstall(): Boolean =
+        paths.prootBin.isFile ||
+            File(paths.rootfs, "bin/bash").isFile ||
+            File(paths.rootfs, "usr/bin/bash").isFile
+
+    private fun prootVersion(): String {
+        if (!paths.prootBin.isFile) return ""
+        val r = Execs.run(
+            runner,
+            listOf(paths.prootBin.absolutePath, "--version"),
+            null,
+            mapOf("LD_LIBRARY_PATH" to paths.toolsLib.absolutePath),
+            "proot --version", 30_000L
+        )
+        val ok = r as? EliResult.Ok ?: return ""
+        return if (ok.value.exitCode == 0) ok.value.combined.trim() else ""
+    }
+
+    private fun guestEcho(): String {
+        return try {
+            val launch = ProotLauncher.execLaunch(paths, listOf("echo", "elicode-ok"))
+            val r = Execs.run(runner, launch.argv, null, launch.env, "guest echo", 60_000L)
+            val ok = r as? EliResult.Ok ?: return ""
+            if (ok.value.exitCode == 0) ok.value.stdout.trim() else ""
+        } catch (_: Throwable) {
+            ""
+        }
+    }
+
+    private fun guestToolVersion(tool: String): String? {        return try {
+            val launch = ProotLauncher.execLaunch(paths, listOf("command", "-v", tool, "&&", tool, "--version"))
+            val r = Execs.run(runner, launch.argv, null, launch.env, "probe $tool", 60_000L)
+            val ok = r as? EliResult.Ok ?: return null
+            if (ok.value.exitCode != 0) return null
+            ok.value.stdout.lineSequence().map { it.trim() }.firstOrNull { it.isNotBlank() }
+        } catch (_: Throwable) {
+            null
+        }
+    }
+}

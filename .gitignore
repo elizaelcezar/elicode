@@ -1,0 +1,30 @@
+# Gradle
+.gradle/
+build/
+app/build/
+**/build/
+local.properties
+
+# Android
+*.apk
+*.aab
+*.ap_
+*.dex
+local.properties
+cmake-build-*/
+
+# IDE
+.idea/
+*.iml
+.DS_Store
+
+# Kotlin
+*.class
+
+# Logs
+*.log
+
+# Runtime downloads (large, fetched at runtime)
+*.tar.xz
+*.tar.gz
+*.deb
