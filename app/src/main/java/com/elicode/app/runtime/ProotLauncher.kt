@@ -26,6 +26,21 @@ object ProotLauncher {
         extraBinds: List<Pair<File, String>> = emptyList()
     ): Launch = build(paths, workDirInGuest, extraBinds, listOf("/bin/bash", "--login"))
 
+    /**
+     * Fullscreen/interactive guest program (e.g. `opencode` TUI) on the
+     * PTY: `exec` replaces the login shell so signals and job control
+     * hit the program directly, not an intermediate bash.
+     */
+    fun tuiLaunch(
+        paths: RuntimePaths,
+        guestCmd: List<String>,
+        workDirInGuest: String = "/projects",
+        extraBinds: List<Pair<File, String>> = emptyList()
+    ): Launch = build(
+        paths, workDirInGuest, extraBinds,
+        listOf("/bin/bash", "--login", "-c", "exec " + guestCmd.joinToString(" "))
+    )
+
     fun execLaunch(
         paths: RuntimePaths,
         guestCmd: List<String>,

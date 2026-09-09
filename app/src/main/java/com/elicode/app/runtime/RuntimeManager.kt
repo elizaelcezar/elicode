@@ -212,6 +212,30 @@ class RuntimeManager(val context: Context) : GitShell {
     }
 
     /**
+     * Starts the pure interactive `opencode` TUI (like a desktop terminal)
+     * on the PTY inside the project dir. Requires runtime + `opencode`
+     * installed (Settings → one-click setup / AI tab → Install).
+     */
+    fun startOpencode(
+        projectDir: File?,
+        listener: ProcessListener?
+    ): EliResult<Pair<String, EliProcess>> {
+        if (!isInstalled()) {
+            return EliResult.Err(
+                EliError(
+                    "Start opencode",
+                    message = "Linux runtime is not installed.",
+                    suggestedFix = "Settings → Install, then open this tab again."
+                )
+            )
+        }
+        val (binds, work) = guestWork(projectDir)
+        val launch = ProotLauncher.tuiLaunch(paths, listOf("opencode"), work, binds)
+        val proc = interactiveRunner.start(launch.argv, null, launch.env, "opencode", listener)
+        return EliResult.Ok(registry.register(proc) to proc)
+    }
+
+    /**
      * Starts an interactive shell process (streaming). Uses guest bash when
      * installed, otherwise host `sh`. Returns registry id + process.
      */

@@ -24,8 +24,8 @@ The product test from the spec — must pass before any release:
 
 Known honest limitations (shown in-app, not hidden):
 
-- Fullscreen TUIs (`vim`, `htop`) launch on a real tty but don't render
-  yet (screen-emulation view is future work); line-mode programs, `^C`,
-  password prompts and job control work via the JNI PTY bridge.
+- Fullscreen TUIs (`vim`, `htop`, `opencode`) render in the VT screen
+  emulator (alt screen, colors); phones have no physical Esc/arrows —
+  use the key bar above the input.
 - First Gradle/Node builds need network (dependency downloads).
 - x86_64 emulators supported (amd64 rootfs, manifest v2, auto-selected by ABI); 32-bit ABIs (armeabi-v7a, x86) remain unsupported.

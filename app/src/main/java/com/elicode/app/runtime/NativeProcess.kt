@@ -121,7 +121,11 @@ class NativeManagedProcess(
 }
 
 /** [ProcessRunner] using the JNI bridge (requires [NativeBridge.AVAILABLE]). */
-class NativeProcessRunner(private val usePty: Boolean = false) : ProcessRunner {
+class NativeProcessRunner(
+    private val usePty: Boolean = false,
+    private val ptyCols: Int = 80,
+    private val ptyRows: Int = 24
+) : ProcessRunner {
     override fun start(
         cmd: List<String>,
         cwd: File?,
@@ -137,7 +141,7 @@ class NativeProcessRunner(private val usePty: Boolean = false) : ProcessRunner {
                 cmd.toTypedArray(),
                 mergedEnv(env),
                 cwd?.absolutePath.orEmpty(),
-                80, 24
+                ptyCols, ptyRows
             )
         } else {
             NativeBridge.nativeSpawnPipe(
