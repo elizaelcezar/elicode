@@ -3,6 +3,7 @@ package com.elicode.app.ui.screens
 import android.annotation.SuppressLint
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.TextView
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -63,6 +64,32 @@ fun PreviewScreen(graph: AppGraph) {
     var webNonce by remember { mutableStateOf(0) }
     var webView by remember { mutableStateOf<WebView?>(null) }
     var autoReload by remember { mutableStateOf(true) }
+    var webViewError by remember(project?.path) { mutableStateOf<String?>(null) }
+
+    // HyperOS/MIUI devices are notorious for broken WebView providers: a
+    // throwing WebView() inside AndroidView aborts composition mid-group
+    // (surfacing later as a Composer stack crash). Probe first, and never
+    // let the factory throw.
+    LaunchedEffect(project?.path) {
+        runCatching {
+            val pkg = WebView.getCurrentWebViewPackage()
+                ?: throw IllegalStateException("no WebView package installed")
+            graph.logs.add("Preview", "webview", "engine: ${pkg.packageName} ${pkg.versionName}")
+        }.onFailure {
+            webViewError = "WebView indisponível neste aparelho (${it.message}). " +
+                "Atualize o 'Android System WebView' ou use 'Abrir no navegador'."
+            graph.logs.add("Preview", "webview", "unavailable: ${it.message}")
+        }
+    }
+
+    // Reloads go through an effect (never a state write inside update).
+    LaunchedEffect(webNonce, server?.url) {
+        val wv = webView
+        if (webNonce > 0 && wv != null) {
+            wv.loadUrl(server?.url ?: return@LaunchedEffect)
+            webNonce = 0
+        }
+    }
 
     // Live preview: project file changes reload the WebView (debounced
     // by the 2s watch poll; skipped while no server is running).
@@ -169,26 +196,40 @@ fun PreviewScreen(graph: AppGraph) {
                     Icon(Icons.Default.Stop, contentDescription = "Stop server")
                 }
             }
-            AndroidView(
+            webViewError?.let {
+                ErrorCard(
+                    EliError(
+                        "Preview WebView",
+                        message = it,
+                        suggestedFix = "O servidor continua rodando — use 'Abrir no navegador'."
+                    ),
+                    onDismiss = { webViewError = null }
+                )
+            }
+            if (webViewError == null) {
+                AndroidView(
                 factory = { ctx ->
-                    WebView(ctx).apply {
-                        settings.javaScriptEnabled = true
-                        settings.domStorageEnabled = true
-                        settings.loadWithOverviewMode = true
-                        settings.useWideViewPort = true
-                        webViewClient = WebViewClient()
-                        loadUrl(s.url)
-                        webView = this
-                    }
+                    runCatching {
+                        WebView(ctx).apply {
+                            settings.javaScriptEnabled = true
+                            settings.domStorageEnabled = true
+                            settings.loadWithOverviewMode = true
+                            settings.useWideViewPort = true
+                            webViewClient = WebViewClient()
+                            loadUrl(s.url)
+                        }
+                    }.getOrElse { err ->
+                        graph.logs.add("Preview", "webview", "create failed: ${err.message}")
+                        TextView(ctx).apply {
+                            text = "WebView falhou aqui (${err.message}). " +
+                                "Use 'Abrir no navegador' acima."
+                        }
+                    }.also { webView = it as? WebView }
                 },
-                update = { wv ->
-                    if (webNonce > 0) {
-                        wv.loadUrl(s.url)
-                        webNonce = 0
-                    }
-                },
+                update = { wv -> webView = wv as? WebView },
                 modifier = Modifier.weight(1f).fillMaxWidth()
-            )
+                )
+            }
             MonoLogCard(graph.preview.recentOutput().takeLast(1500))
         } ?: run {
             EmptyState("Start the dev server, then the app preview appears here.")
