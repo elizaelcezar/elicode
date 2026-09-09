@@ -461,6 +461,26 @@ fun DiagnosticsScreen(graph: AppGraph) {
             }.takeLast(12000)
         )
         androidx.compose.foundation.layout.Spacer(Modifier.padding(4.dp))
+        SectionHeader("Last crash")
+        val crashDir = remember { java.io.File(context.filesDir, "elicode/logs") }
+        var crashText by remember { mutableStateOf(com.elicode.app.EliCodeApp.readCrash(crashDir)) }
+        if (crashText.isBlank()) {
+            Text("No recorded crashes.", style = MaterialTheme.typography.bodySmall)
+        } else {
+            MonoLogCard(crashText.takeLast(3000))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = {
+                    val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    cm.setPrimaryClip(ClipData.newPlainText("elicode-crash", crashText.take(20000)))
+                    Toast.makeText(context, "Crash copiado — pode colar", Toast.LENGTH_SHORT).show()
+                }) { Text("📋 Copiar crash") }
+                OutlinedButton(onClick = {
+                    com.elicode.app.EliCodeApp.clearCrash(crashDir)
+                    crashText = ""
+                }) { Text("Clear") }
+            }
+        }
+        androidx.compose.foundation.layout.Spacer(Modifier.padding(4.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = {
                 val text = buildString {

@@ -72,12 +72,17 @@ fun EditorScreen(graph: AppGraph, onNavigate: (String) -> Unit) {
             }
         }
         Divider()
+        // Snapshot the tab list: LazyRow items compose lazily, and an
+        // in-place size read (openFiles.size … openFiles[i]) races with
+        // tab close/switch, aborting composition mid-group (which
+        // surfaces later as a Composer stack crash).
+        val files = session.openFiles
         // Open file tabs.
         androidx.compose.foundation.lazy.LazyRow(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)
         ) {
-            items(session.openFiles.size) { i ->
-                val rel = session.openFiles[i]
+            items(files.size) { i ->
+                val rel = files[i]
                 AssistChip(
                     onClick = { session.activeFile = rel },
                     label = { Text((if (modified[rel] == true) "• " else "") + File(rel).name) },
