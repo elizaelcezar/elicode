@@ -14,6 +14,13 @@ The product test from the spec — must pass before any release:
    streams → file tree refreshes → git status lists the change.
 7. [ ] Terminal: `cd /projects/E2E` equivalent + `./gradlew assembleDebug`
    (after Android toolchain setup) — or one-tap **Build APK**.
+   On-device APK validation (first green build ever — do not skip):
+   - [ ] Config → ⚡ Configurar tudo completes all 4 steps (or Android
+     toolchain step alone) on a real ARM64 device.
+   - [ ] Build tab preflight shows ✓ java / ✓ gradle / ✓ android-sdk.
+   - [ ] `assembleDebug` finishes; if AAPT2 fails with x86/`cannot
+     execute`, the ARM64 aapt2 path is broken — see BuildEngine error map.
+   - [ ] **Install** → Package Installer opens → app installs → launches.
 8. [ ] Build tab lists `app-debug.apk` with size + path.
 9. [ ] **Install** → Package Installer opens → app installs → launches.
 10. [ ] Git: init/add/commit in E2E; GitHub: connect token, list repos,

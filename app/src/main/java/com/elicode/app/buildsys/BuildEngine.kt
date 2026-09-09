@@ -25,6 +25,48 @@ class BuildEngine(private val context: Context, private val runtime: RuntimeMana
 
     data class GradleInfo(val command: String, val viaWrapper: Boolean)
 
+    data class PreCheck(val name: String, val ok: Boolean, val detail: String)
+
+    /**
+     * Guest toolchain preflight (runs before offering Build APK): JDK,
+     * Gradle and an Android platform must exist in the Ubuntu runtime.
+     * Missing pieces point to Config → one-click setup.
+     */
+    fun preflight(): List<PreCheck> {
+        if (!runtime.isInstalled()) {
+            return listOf(PreCheck("runtime", false, "Linux runtime not installed."))
+        }
+        val out = mutableListOf<PreCheck>()
+        val java = runtime.execInRuntime("command -v java && java -version 2>&1 | head -1", null, 30_000L)
+        val javaOk = java as? EliResult.Ok
+        out += PreCheck(
+            "java",
+            javaOk != null && javaOk.value.exitCode == 0,
+            (javaOk?.value?.stdout?.trim()?.lineSequence()?.firstOrNull()
+                ?: "not found — Config → ⚡ Configurar tudo").take(100)
+        )
+        val gradle = runtime.execInRuntime("command -v gradle && gradle --version 2>/dev/null | head -6 | tr '\\n' ' '", null, 60_000L)
+        val gradleOk = gradle as? EliResult.Ok
+        out += PreCheck(
+            "gradle",
+            gradleOk != null && gradleOk.value.exitCode == 0,
+            (gradleOk?.value?.stdout?.trim()?.ifBlank { null }
+                ?: "not found — Config → ⚡ Configurar tudo").take(100)
+        )
+        val sdk = runtime.execInRuntime(
+            "ls -d \${ANDROID_HOME:-/opt/android-sdk}/platforms/android-* 2>/dev/null | tr '\\n' ' '",
+            null, 30_000L
+        )
+        val sdkOk = sdk as? EliResult.Ok
+        val platforms = sdkOk?.value?.stdout?.trim().orEmpty()
+        out += PreCheck(
+            "android-sdk",
+            sdkOk != null && sdkOk.value.exitCode == 0 && platforms.isNotBlank(),
+            (platforms.ifBlank { "no platform installed — Config → ⚡ Configurar tudo" }).take(100)
+        )
+        return out
+    }
+
     /** Detects how to invoke Gradle for [projectDir]. */
     fun detectGradle(projectDir: File): EliResult<GradleInfo> {
         val wrapper = File(projectDir, "gradlew")

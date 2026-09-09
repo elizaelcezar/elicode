@@ -20,10 +20,14 @@ To sign: add your keystore to `app/build.gradle` `signingConfigs`
 
 ## Build an *app inside EliCode* (on device)
 
-1. Settings → Runtime → Install (base) + Android toolchain
-   (`setup-android.sh` in the Terminal).
+1. Config → **⚡ Configurar tudo** (one-click: runtime + Node + OpenCode +
+   Android toolchain), or Settings → Runtime → Install (base) +
+   Android toolchain (`setup-android.sh`: JDK 17, Gradle 8.7,
+   cmdline-tools, platform 34, build-tools 35 — guest versions are
+   independent from this repo's host toolchain).
 2. Projects → New → **Android (Kotlin + Compose)**.
-3. Build tab → **▶ Build APK** (runs `<gradle> assembleDebug` in Ubuntu,
+3. Build tab → preflight must show ✓ java / ✓ gradle / ✓ android-sdk,
+   then **▶ Build APK** (runs `<gradle> assembleDebug` in Ubuntu,
    streams the log, interprets common failures: missing platform,
    unresolved deps, OOM, x86 AAPT2).
 4. **Install** (Package Installer via FileProvider; grants

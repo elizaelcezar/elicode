@@ -55,6 +55,7 @@ fun BuildScreen(graph: AppGraph) {
     var apks by remember { mutableStateOf<List<BuildArtifact>>(emptyList()) }
     var aabs by remember { mutableStateOf<List<BuildArtifact>>(emptyList()) }
     var extraArgs by remember { mutableStateOf("") }
+    var preflight by remember { mutableStateOf<List<BuildEngine.PreCheck>?>(null) }
 
     fun refreshOutputs() {
         project?.let {
@@ -68,6 +69,10 @@ fun BuildScreen(graph: AppGraph) {
         project?.let {
             gradleInfo = (graph.build.detectGradle(File(it.path)) as? EliResult.Ok)?.value
             refreshOutputs()
+        }
+        scope.launch(Dispatchers.IO) {
+            val checks = graph.build.preflight()
+            withContext(Dispatchers.Main) { preflight = checks }
         }
     }
 
@@ -129,6 +134,28 @@ fun BuildScreen(graph: AppGraph) {
             return@Column
         }
         Text(project.name, style = MaterialTheme.typography.labelLarge)
+        FormCard {
+            Text("Toolchain (Ubuntu guest)", style = MaterialTheme.typography.labelMedium)
+            val checks = preflight
+            if (checks == null) {
+                Text("Probing JDK / Gradle / SDK…", style = MaterialTheme.typography.bodySmall)
+            } else {
+                checks.forEach { c ->
+                    Text(
+                        "${if (c.ok) "✓" else "✗"} ${c.name}: ${c.detail}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (c.ok) MaterialTheme.colorScheme.onSurface
+                        else MaterialTheme.colorScheme.error
+                    )
+                }
+                if (checks.any { !it.ok }) {
+                    Text(
+                        "Missing pieces install automatically: Config → ⚡ Configurar tudo.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+        }
         FormCard {
             Text("Gradle: ${gradleInfo?.command ?: "not detected"}", style = MaterialTheme.typography.bodyMedium)
             OutlinedTextField(
