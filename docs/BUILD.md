@@ -9,6 +9,13 @@ gradle :app:assembleDebug
 Output: `app/build/outputs/apk/debug/app-debug.apk`
 (`applicationIdSuffix ".debug"` → `com.elicode.app.debug`).
 
+Debug APKs are distributed as GitHub Release assets (never committed
+to git — `*.apk` is gitignored):
+
+```sh
+gh release create vX.Y.Z-debug app/build/outputs/apk/debug/app-debug.apk
+```
+
 Release (unsigned unless configured):
 
 ```sh
