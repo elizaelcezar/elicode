@@ -395,6 +395,58 @@ fun appVersion(context: android.content.Context): String {
     }.getOrDefault("0.1.0")
 }
 
+/**
+ * One-shot guest diagnosis (dpkg permissions, DNS, disk) that needs
+ * neither the terminal tab nor paste: one tap runs it, one tap copies
+ * it. Pure script const — unit-tested.
+ */
+internal const val GUEST_PROBE_SCRIPT =
+    "id; echo ---; ls -la /var/lib/dpkg/ | head -25; echo ---; " +
+        "touch /var/lib/dpkg/tw && echo WTOK && rm /var/lib/dpkg/tw; echo ---; " +
+        "df -h /var/lib/dpkg | tail -1; echo ---; cat /etc/resolv.conf"
+
+@Composable
+private fun GuestProbeCard(graph: AppGraph) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var running by remember { mutableStateOf(false) }
+    var output by remember { mutableStateOf("") }
+    SectionHeader("Guest probe")
+    Text(
+        "Diagnóstico do Ubuntu sem abrir o terminal (permissões do dpkg, DNS, disco).",
+        style = MaterialTheme.typography.bodySmall
+    )
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Button(
+            onClick = {
+                running = true
+                output = ""
+                scope.launch(Dispatchers.IO) {
+                    val res = graph.runtime.execInRuntime(GUEST_PROBE_SCRIPT, null, 60_000L)
+                    val text = when (res) {
+                        is EliResult.Ok -> "exit=${res.value.exitCode}\n${res.value.combined}"
+                        is EliResult.Err -> "ERROR: ${res.error.format()}"
+                    }.take(8000)
+                    graph.logs.add("Diagnostics", "guest-probe", text.take(2000))
+                    withContext(Dispatchers.Main) {
+                        output = text
+                        running = false
+                    }
+                }
+            },
+            enabled = !running
+        ) { Text(if (running) "Probando…" else "Executar proba") }
+        if (output.isNotBlank()) {
+            OutlinedButton(onClick = {
+                val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                cm.setPrimaryClip(ClipData.newPlainText("elicode-guest-probe", output.take(20000)))
+                Toast.makeText(context, "Proba copiada — pode colar", Toast.LENGTH_SHORT).show()
+            }) { Text("📋 Copiar") }
+        }
+    }
+    if (output.isNotBlank()) MonoLogCard(output.takeLast(4000))
+}
+
 @Composable
 fun DiagnosticsScreen(graph: AppGraph) {
     val context = LocalContext.current
@@ -438,6 +490,7 @@ fun DiagnosticsScreen(graph: AppGraph) {
                 style = MaterialTheme.typography.bodySmall
             )
         }
+        GuestProbeCard(graph)
         SectionHeader("Logs")
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             androidx.compose.material3.FilterChip(

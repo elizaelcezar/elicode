@@ -107,7 +107,8 @@ class TerminalController(
     fun startOpencode() {
         if (opencodeRunning.value) return
         opencodeError.value = null
-        val projectDir = session.projectDir()
+        try {
+            val projectDir = session.projectDir()
         val startedAt = System.currentTimeMillis()
         val listener = object : ProcessListener {
             override fun onOutput(stream: Stream, text: String) {
@@ -148,6 +149,10 @@ class TerminalController(
                 opencodeError.value = "${r.error.message} ${r.error.suggestedFix}".trim()
             }
         }
+        } catch (t: Throwable) {
+            opencodeError.value = "Could not start opencode: ${t.message}"
+            log("Terminal", "guard", "startOpencode: ${t.javaClass.simpleName}: ${t.message}")
+        }
     }
 
     /** Sends raw keystrokes to the TUI (no command checks, no echo). */
@@ -166,44 +171,50 @@ class TerminalController(
     }
 
     fun switchMode(m: TermMode) {
-        if (mode.value == m) return
-        if (m == TermMode.OPENCODE) kill() else killOpencode()
-        mode.value = m
-        main.postDelayed({ start() }, 300)
+        runCatching {
+            if (mode.value == m) return
+            if (m == TermMode.OPENCODE) kill() else killOpencode()
+            mode.value = m
+            main.postDelayed({ start() }, 300)
+        }.onFailure { log("Terminal", "guard", "switchMode: ${it.javaClass.simpleName}: ${it.message}") }
     }
 
     fun killOpencode() {
-        opId?.let {
-            runtime.registry.kill(it)
-            EliCodeService.taskFinished(context, "opencode-$it")
-        }
-        oproc = null
-        opId = null
-        main.post { opencodeRunning.value = false }
+        runCatching {
+            opId?.let {
+                runtime.registry.kill(it)
+                EliCodeService.taskFinished(context, "opencode-$it")
+            }
+            oproc = null
+            opId = null
+            main.post { opencodeRunning.value = false }
+        }.onFailure { log("Terminal", "guard", "killOpencode: ${it.javaClass.simpleName}: ${it.message}") }
     }
 
     fun restartOpencode() {
-        killOpencode()
-        emulator.process("\u001B[2J")
-        main.postDelayed({ startOpencode() }, 300)
+        runCatching {
+            killOpencode()
+            emulator.process("\u001B[2J")
+            main.postDelayed({ startOpencode() }, 300)
+        }.onFailure { log("Terminal", "guard", "restartOpencode: ${it.javaClass.simpleName}: ${it.message}") }
     }
 
     fun startShell() {
         if (running.value) return
-        val projectDir = session.projectDir()
-        val listener = object : ProcessListener {
-            override fun onOutput(stream: Stream, text: String) {
-                emit(text)
-                log("Terminal", "shell", text.take(500))
-            }
-
-            override fun onExit(code: Int) {
-                emit("\n[shell exited: $code — tap ⟳ to restart]\n")
-                main.post { running.value = false }
-                shellId?.let { EliCodeService.taskFinished(context, "shell-$it") }
-            }
-        }
         try {
+            val projectDir = session.projectDir()
+            val listener = object : ProcessListener {
+                override fun onOutput(stream: Stream, text: String) {
+                    emit(text)
+                    log("Terminal", "shell", text.take(500))
+                }
+
+                override fun onExit(code: Int) {
+                    emit("\n[shell exited: $code — tap ⟳ to restart]\n")
+                    main.post { running.value = false }
+                    shellId?.let { EliCodeService.taskFinished(context, "shell-$it") }
+                }
+            }
             val (id, proc) = runtime.startShell(projectDir, listener)
             shellId = id
             shell = proc
@@ -260,18 +271,22 @@ class TerminalController(
     }
 
     fun restart() {
-        kill()
-        main.postDelayed({ start() }, 300)
+        runCatching {
+            kill()
+            main.postDelayed({ start() }, 300)
+        }.onFailure { log("Terminal", "guard", "restart: ${it.javaClass.simpleName}: ${it.message}") }
     }
 
     fun kill() {
-        shellId?.let {
-            runtime.registry.kill(it)
-            EliCodeService.taskFinished(context, "shell-$it")
-        }
-        shell = null
-        shellId = null
-        main.post { running.value = false }
+        runCatching {
+            shellId?.let {
+                runtime.registry.kill(it)
+                EliCodeService.taskFinished(context, "shell-$it")
+            }
+            shell = null
+            shellId = null
+            main.post { running.value = false }
+        }.onFailure { log("Terminal", "guard", "kill: ${it.javaClass.simpleName}: ${it.message}") }
     }
 }
 
