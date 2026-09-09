@@ -17,7 +17,10 @@ import java.io.File
  * Central runtime facade: host shell, guest (PRoot/Ubuntu) shell,
  * interactive sessions, install/validate/repair orchestration.
  */
-class RuntimeManager(val context: Context) : GitShell {
+class RuntimeManager(
+    val context: Context,
+    private val log: (category: String, tag: String, message: String) -> Unit = { _, _, _ -> }
+) : GitShell {
 
     val paths = RuntimePaths(context)
     /** One-shots: split stdout/stderr (native pipe runner when available). */
@@ -25,7 +28,7 @@ class RuntimeManager(val context: Context) : GitShell {
     /** Interactive shells: real PTY (native when available). */
     val interactiveRunner: ProcessRunner = defaultProcessRunner(usePty = true)
     val registry = ProcessRegistry()
-    val installer = RuntimeInstaller(context, paths)
+    val installer = RuntimeInstaller(context, paths, log)
     val validator = RuntimeValidator(context, paths)
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)

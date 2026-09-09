@@ -28,9 +28,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.elicode.app.core.EliError
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
 
 @Composable
 fun ErrorCard(error: EliError, onDismiss: (() -> Unit)? = null, onRetry: (() -> Unit)? = null) {
+    val context = LocalContext.current
     Card(
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
@@ -46,6 +52,11 @@ fun ErrorCard(error: EliError, onDismiss: (() -> Unit)? = null, onRetry: (() -> 
                 if (onRetry != null) {
                     Button(onClick = onRetry) { Text("Retry") }
                 }
+                TextButton(onClick = {
+                    val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    cm.setPrimaryClip(ClipData.newPlainText("elicode-error", error.format()))
+                    Toast.makeText(context, "Erro copiado — pode colar", Toast.LENGTH_SHORT).show()
+                }) { Text("📋 Copiar") }
                 if (onDismiss != null) {
                     OutlinedButton(onClick = onDismiss) { Text("Dismiss") }
                 }

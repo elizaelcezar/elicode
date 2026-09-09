@@ -31,12 +31,14 @@ class AppGraph(val app: EliCodeApp) {
     val logs = LogStore(app)
     val secrets = KeystoreStore(app)
     val session = SessionState()
-    val runtime = RuntimeManager(app)
+    // Unified log: installer + setup funnel everything into LogStore, so
+    // Diagnostics → Copiar diagnóstico always carries the full story.
+    val runtime = RuntimeManager(app) { c, t, m -> logs.add(c, t, m) }
     val projects = ProjectManager(app)
     val git = GitEngine(runtime)
     val agent = OpenCodeEngine(runtime)
     val build = BuildEngine(app, runtime)
     val preview = PreviewEngine(runtime)
     val github = GitHubApi()
-    val setup = SetupOrchestrator(app, runtime, agent)
+    val setup = SetupOrchestrator(app, runtime, agent) { c, t, m -> logs.add(c, t, m) }
 }

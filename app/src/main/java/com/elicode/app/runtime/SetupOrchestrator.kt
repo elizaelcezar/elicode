@@ -22,7 +22,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 class SetupOrchestrator(
     private val context: Context,
     private val runtime: RuntimeManager,
-    private val agent: OpenCodeEngine
+    private val agent: OpenCodeEngine,
+    private val log: (category: String, tag: String, message: String) -> Unit = { _, _, _ -> }
 ) {
     enum class State { PENDING, RUNNING, DONE, FAILED, SKIPPED }
 
@@ -119,12 +120,16 @@ class SetupOrchestrator(
 
     private fun run(listener: Listener) {
         listener.onLog("Probing installed components…")
-        val steps = planSteps(probeState()).toMutableList()
+        val probed = probeState()
+        log("Setup", "probe", "runtime=${probed.runtimeInstalled} node=${probed.nodeVersion} " +
+            "opencode=${probed.opencodeVersion} android=${probed.androidReady}")
+        val steps = planSteps(probed).toMutableList()
         listener.onUpdate(steps.toList())
 
         for (step in steps) {
             if (cancelled.get()) {
                 step.detail = "cancelled"
+                log("Setup", step.id, "cancelled")
                 listener.onUpdate(steps.toList())
                 listener.onDone(false)
                 return
@@ -134,6 +139,7 @@ class SetupOrchestrator(
                 continue
             }
             step.state = State.RUNNING
+            log("Setup", step.id, "starting: ${step.label}")
             listener.onUpdate(steps.toList())
             val ok = when (step.id) {
                 RUNTIME -> installRuntime(listener, step)
@@ -143,6 +149,7 @@ class SetupOrchestrator(
                 else -> false
             }
             step.state = if (ok) State.DONE else State.FAILED
+            log("Setup", step.id, if (ok) "done" else "FAILED: ${step.detail.take(300)}")
             listener.onUpdate(steps.toList())
             if (!ok) {
                 listener.onLog("✗ ${step.label} failed — fix and re-run (done steps are skipped).")
@@ -152,6 +159,7 @@ class SetupOrchestrator(
             listener.onLog("✓ ${step.label} done.")
         }
         runtime.refreshStatus(probeTools = true)
+        log("Setup", "done", "all steps finished")
         listener.onDone(true)
     }
 

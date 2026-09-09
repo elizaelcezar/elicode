@@ -332,7 +332,16 @@ private fun TestRunnerCard(graph: AppGraph) {
                                         runId = null
                                     }
                                     summary = parsed
-                                    graph.logs.add("Test", project.name, parsed.headline())
+                                    val detail = buildString {
+                                        append(parsed.headline())
+                                        if (parsed.failedTasks.isNotEmpty()) {
+                                            append(" Failed: ${parsed.failedTasks.joinToString()}")
+                                        }
+                                    }.take(500)
+                                    graph.logs.add("Test", project.name, detail)
+                                    if (!parsed.buildOk || parsed.failed > 0) {
+                                        graph.logs.add("Test", project.name, log.takeLast(3000))
+                                    }
                                 }
                             }
                         }

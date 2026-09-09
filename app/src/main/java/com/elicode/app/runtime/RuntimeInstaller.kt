@@ -25,7 +25,20 @@ import java.util.concurrent.atomic.AtomicBoolean
  * a retry resumes instead of restarting. Never reports "installed"
  * before [RuntimeValidator] passes the core checks.
  */
-class RuntimeInstaller(private val context: Context, val paths: RuntimePaths) {
+class RuntimeInstaller(
+    private val context: Context,
+    val paths: RuntimePaths,
+    private val log: (category: String, tag: String, message: String) -> Unit = { _, _, _ -> }
+) {
+
+    /**
+     * Self-heal policy: after a corrupt-cache or extraction failure the
+     * installer re-downloads the package and retries exactly once, then
+     * gives up with a clear error. Pure policy — unit-tested.
+     */
+    object RecoveryPolicy {
+        fun shouldRedownload(failuresSoFar: Int): Boolean = failuresSoFar < 1
+    }
 
     data class Package(val fileName: String, val urls: List<String>, val sha256: String) {
         val url: String get() = urls.firstOrNull().orEmpty()
@@ -94,8 +107,9 @@ class RuntimeInstaller(private val context: Context, val paths: RuntimePaths) {
     }
 
     fun install(listener: Listener) {
+        val l = logging(listener)
         if (!busy.compareAndSet(false, true)) {
-            listener.onError(
+            l.onError(
                 EliError(
                     "Install runtime",
                     message = "An install or repair is already running.",
@@ -132,29 +146,15 @@ class RuntimeInstaller(private val context: Context, val paths: RuntimePaths) {
                 )
             }
 
-            // ---- PRoot + libs ----
+            // ---- PRoot + libs (self-healing: corrupt cache is
+            // re-downloaded and retried once, automatically) ----
             stage(listener, "proot-dl", 0.05f, "Downloading PRoot…")
-            download(paths.downloads, cfg.prootDeb, listener, "proot-dl", 0.05f, 0.12f)
-            download(paths.downloads, cfg.tallocDeb, listener, "proot-dl", 0.12f, 0.14f)
-            download(paths.downloads, cfg.shmemDeb, listener, "proot-dl", 0.14f, 0.16f)
-
+            val stageDir = File(paths.stage, "debs").apply { deleteRecursively(); mkdirs() }
+            fetchExtractDeb(cfg.prootDeb, "proot", stageDir, listener, "proot-dl", 0.05f, 0.12f)
+            fetchExtractDeb(cfg.tallocDeb, "talloc", stageDir, listener, "proot-dl", 0.12f, 0.14f)
+            fetchExtractDeb(cfg.shmemDeb, "shmem", stageDir, listener, "proot-dl", 0.14f, 0.16f)
             checkCancel()
             stage(listener, "proot-x", 0.16f, "Installing PRoot…")
-            val stageDir = File(paths.stage, "debs").apply { deleteRecursively(); mkdirs() }
-            // Re-verify right before extracting: catches bitrot, kills
-            // mid-write and stale caches from older builds.
-            val prootVerified = verifyCache(cfg.prootDeb)
-            val tallocVerified = verifyCache(cfg.tallocDeb)
-            val shmemVerified = verifyCache(cfg.shmemDeb)
-            runExtract("Extract ${prootVerified.name}", prootVerified) {
-                ArchiveExtractor.extractDeb(prootVerified, File(stageDir, "proot"))
-            }
-            runExtract("Extract ${tallocVerified.name}", tallocVerified) {
-                ArchiveExtractor.extractDeb(tallocVerified, File(stageDir, "talloc"))
-            }
-            runExtract("Extract ${shmemVerified.name}", shmemVerified) {
-                ArchiveExtractor.extractDeb(shmemVerified, File(stageDir, "shmem"))
-            }
             installProotFromStage(stageDir)
             val machine = ArchiveExtractor.elfMachine(paths.prootBin)
             val expected = ArchSupport.expectedElf(arch)
@@ -194,20 +194,8 @@ class RuntimeInstaller(private val context: Context, val paths: RuntimePaths) {
             // ---- Ubuntu rootfs ----
             checkCancel()
             stage(listener, "rootfs-dl", 0.22f, "Downloading Ubuntu ARM64…")
-            download(paths.downloads, cfg.rootfs, listener, "rootfs-dl", 0.22f, 0.6f)
-
-            checkCancel()
-            stage(listener, "rootfs-x", 0.6f, "Extracting Ubuntu (this takes a while)…")
-            val tgzVerified = verifyCache(cfg.rootfs)
             checkFreeSpaceForExtract()
-            runExtract("Extract ${tgzVerified.name}", tgzVerified) {
-                paths.rootfs.deleteRecursively()
-                paths.rootfs.mkdirs()
-                ArchiveExtractor.extractRootfsTarGz(tgzVerified, paths.rootfs) { p ->
-                    val frac = 0.6f + 0.25f * (p.entries / 4000f).coerceIn(0f, 1f)
-                    stage(listener, "rootfs-x", frac, "Extracting Ubuntu… ${p.entries} entries")
-                }
-            }
+            fetchExtractRootfs(cfg.rootfs, listener)
 
             checkCancel()
             stage(listener, "configure", 0.87f, "Configuring Ubuntu…")
@@ -232,13 +220,13 @@ class RuntimeInstaller(private val context: Context, val paths: RuntimePaths) {
             stage(listener, "done", 1f, "Runtime ready.")
             listener.onDone()
         } catch (e: InstallFail) {
-            listener.onError(e.error)
+            l.onError(e.error)
         } catch (e: InterruptedException) {
-            listener.onError(
+            l.onError(
                 EliError("Install runtime", message = "Cancelled.", suggestedFix = "Retry to resume downloads.")
             )
         } catch (t: Throwable) {
-            listener.onError(
+            l.onError(
                 EliError.unknown("Install runtime", t).copy(
                     message = "${t.javaClass.simpleName}: ${t.message}",
                     suggestedFix = "Check storage/network, then retry. Partial downloads resume automatically."
@@ -251,8 +239,9 @@ class RuntimeInstaller(private val context: Context, val paths: RuntimePaths) {
 
     /** Re-extracts cached archives + reconfigures, without re-downloading. */
     fun repair(listener: Listener) {
+        val l = logging(listener)
         if (!busy.compareAndSet(false, true)) {
-            listener.onError(
+            l.onError(
                 EliError(
                     "Repair runtime",
                     message = "An install or repair is already running.",
@@ -266,12 +255,11 @@ class RuntimeInstaller(private val context: Context, val paths: RuntimePaths) {
             val cfg = loadConfig()
             stage(listener, "repair", 0f, "Repairing runtime…")
             val stageDir = File(paths.stage, "debs").apply { deleteRecursively(); mkdirs() }
-            // Repair used to re-extract blindly: a corrupt cache failed
-            // here forever. Now bad caches are deleted with a clear
-            // message pointing back to Install (which re-downloads).
-            val prootVerified = verifyCache(cfg.prootDeb)
-            val tallocVerified = verifyCache(cfg.tallocDeb)
-            val shmemVerified = verifyCache(cfg.shmemDeb)
+            // Self-healing repair: missing/corrupt caches are re-downloaded
+            // (once each) instead of failing blindly like before.
+            val prootVerified = fetchVerified(cfg.prootDeb, listener, "repair")
+            val tallocVerified = fetchVerified(cfg.tallocDeb, listener, "repair")
+            val shmemVerified = fetchVerified(cfg.shmemDeb, listener, "repair")
             runExtract("Extract ${prootVerified.name}", prootVerified) {
                 ArchiveExtractor.extractDeb(prootVerified, File(stageDir, "proot"))
             }
@@ -283,18 +271,15 @@ class RuntimeInstaller(private val context: Context, val paths: RuntimePaths) {
             }
             installProotFromStage(stageDir)
             paths.prootBin.setExecutable(true, false)
-            val tgzFile = File(paths.downloads, cfg.rootfs.fileName)
-            if (tgzFile.isFile) {
-                val tgzVerified = verifyCache(cfg.rootfs)
-                runExtract("Extract ${tgzVerified.name}", tgzVerified) {
-                    paths.rootfs.deleteRecursively()
-                    paths.rootfs.mkdirs()
-                    ArchiveExtractor.extractRootfsTarGz(tgzVerified, paths.rootfs) { p ->
-                        stage(listener, "repair", (p.entries / 4000f).coerceIn(0f, 0.8f), "Re-extracting… ${p.entries}")
-                    }
+            val tgzVerified = fetchVerified(cfg.rootfs, listener, "repair")
+            runExtract("Extract ${tgzVerified.name}", tgzVerified) {
+                paths.rootfs.deleteRecursively()
+                paths.rootfs.mkdirs()
+                ArchiveExtractor.extractRootfsTarGz(tgzVerified, paths.rootfs) { p ->
+                    stage(listener, "repair", (p.entries / 4000f).coerceIn(0f, 0.8f), "Re-extracting… ${p.entries}")
                 }
-                configureRootfs()
             }
+            configureRootfs()
             val report = RuntimeValidator(context, paths).validateCore()
             val failed = report.filter { it.required && !it.ok }
             if (failed.isNotEmpty()) {
@@ -306,9 +291,9 @@ class RuntimeInstaller(private val context: Context, val paths: RuntimePaths) {
             stage(listener, "done", 1f, "Runtime repaired.")
             listener.onDone()
         } catch (e: InstallFail) {
-            listener.onError(e.error)
+            l.onError(e.error)
         } catch (t: Throwable) {
-            listener.onError(EliError.unknown("Repair runtime", t))
+            l.onError(EliError.unknown("Repair runtime", t))
         } finally {
             busy.set(false)
         }
@@ -370,6 +355,103 @@ class RuntimeInstaller(private val context: Context, val paths: RuntimePaths) {
         return f
     }
 
+    /**
+     * Downloads + verifies + extracts one .deb, healing itself once: a
+     * corrupt cache or a failed extraction deletes the file and retries
+     * the whole fetch before surfacing an error.
+     */
+    private fun fetchExtractDeb(
+        pkg: Package,
+        subdir: String,
+        stageDir: File,
+        listener: Listener,
+        stage: String,
+        from: Float,
+        to: Float
+    ) {
+        var failures = 0
+        while (true) {
+            checkCancel()
+            val f = download(paths.downloads, pkg, listener, stage, from, to)
+            try {
+                verifyCache(pkg)
+            } catch (e: InstallFail) {
+                if (!RecoveryPolicy.shouldRedownload(failures++)) throw e
+                onHeal(listener, pkg, "checksum", failures)
+                continue
+            }
+            try {
+                val dest = File(stageDir, subdir).apply { deleteRecursively(); mkdirs() }
+                runExtract("Extract ${f.name}", f) {
+                    ArchiveExtractor.extractDeb(f, dest)
+                }
+                return
+            } catch (e: InstallFail) {
+                if (!RecoveryPolicy.shouldRedownload(failures++)) throw e
+                onHeal(listener, pkg, "extraction", failures)
+                f.delete()
+                File(paths.downloads, pkg.fileName + ".part").delete()
+            }
+        }
+    }
+
+    /** Same self-healing fetch for the Ubuntu rootfs tarball. */
+    private fun fetchExtractRootfs(pkg: Package, listener: Listener) {
+        var failures = 0
+        while (true) {
+            checkCancel()
+            val f = download(paths.downloads, pkg, listener, "rootfs-dl", 0.22f, 0.6f)
+            try {
+                verifyCache(pkg)
+            } catch (e: InstallFail) {
+                if (!RecoveryPolicy.shouldRedownload(failures++)) throw e
+                onHeal(listener, pkg, "checksum", failures)
+                continue
+            }
+            try {
+                runExtract("Extract ${f.name}", f) {
+                    paths.rootfs.deleteRecursively()
+                    paths.rootfs.mkdirs()
+                    ArchiveExtractor.extractRootfsTarGz(f, paths.rootfs) { p ->
+                        val frac = 0.6f + 0.25f * (p.entries / 4000f).coerceIn(0f, 1f)
+                        stage(listener, "rootfs-x", frac, "Extracting Ubuntu… ${p.entries} entries")
+                    }
+                }
+                return
+            } catch (e: InstallFail) {
+                if (!RecoveryPolicy.shouldRedownload(failures++)) throw e
+                onHeal(listener, pkg, "extraction", failures)
+                f.delete()
+                File(paths.downloads, pkg.fileName + ".part").delete()
+            }
+        }
+    }
+
+    /**
+     * Verifies a cached archive, re-downloading it (once) when missing
+     * or corrupt. Used by Repair so it heals instead of failing blindly.
+     */
+    private fun fetchVerified(pkg: Package, listener: Listener, stage: String): File {
+        var failures = 0
+        while (true) {
+            checkCancel()
+            try {
+                return verifyCache(pkg)
+            } catch (e: InstallFail) {
+                if (!RecoveryPolicy.shouldRedownload(failures++)) throw e
+                onHeal(listener, pkg, "cache", failures)
+                download(paths.downloads, pkg, listener, stage, 0f, 0.5f)
+            }
+        }
+    }
+
+    private fun onHeal(listener: Listener, pkg: Package, kind: String, attempt: Int) {
+        stage(
+            listener, "heal", 0f,
+            "Self-heal: ${pkg.fileName} failed $kind — re-downloading (attempt $attempt)…"
+        )
+    }
+
     /** Runs an extraction with file context so archive failures pinpoint the file. */
     private inline fun runExtract(op: String, file: File, fn: () -> Unit) {
         try {
@@ -396,15 +478,33 @@ class RuntimeInstaller(private val context: Context, val paths: RuntimePaths) {
             throw InstallFail(
                 EliError(
                     "Check free space",
-                    message = "Only ${free / 1_000_000}MB free before Ubuntu extraction.",
-                    probableCause = "Extraction needs ~500MB scratch beyond the download.",
-                    suggestedFix = "Free up space and retry (Repair reuses downloads)."
+                    message = "Only ${free / 1_000_000}MB free before Ubuntu download + extraction.",
+                    probableCause = "Download + extraction need ~500MB scratch.",
+                    suggestedFix = "Free up space and retry (downloads already fetched are kept)."
                 )
             )
         }
     }
 
-    private fun stage(l: Listener, s: String, f: Float, m: String) = l.onStage(s, f, m)
+    private fun stage(l: Listener, s: String, f: Float, m: String) {
+        // Unified log: every stage lands in LogStore, so Diagnostics →
+        // Copiar diagnóstico always carries the full story.
+        log("Runtime", s, m.take(500))
+        l.onStage(s, f, m)
+    }
+
+    /** Decorates a listener so final errors also land in the unified log. */
+    private fun logging(base: Listener): Listener = object : Listener {
+        override fun onStage(stage: String, fraction: Float, message: String) =
+            base.onStage(stage, fraction, message)
+
+        override fun onDone() = base.onDone()
+
+        override fun onError(error: EliError) {
+            log("Runtime", "error", error.format().take(2000))
+            base.onError(error)
+        }
+    }
 
     private fun freeBytes(): Long {
         return runCatching {
