@@ -42,12 +42,25 @@ object ProotLauncher {
     fun linkerArgv(linker: String, toolsLib: String, prootBin: String, rest: List<String>): List<String> =
         listOf(linker, "--library-path", toolsLib, prootBin) + rest
 
+    /**
+     * Picks the proot invocation mode from probe results, cheapest
+     * first: 0=direct, 1=linker+filesDir, 2=linker+bundled .so,
+     * -1=nothing works. Pure — unit-tested.
+     */
+    fun pickMode(directOk: Boolean, linkerFilesOk: Boolean, linkerSoOk: Boolean): Int = when {
+        directOk -> 0
+        linkerFilesOk -> 1
+        linkerSoOk -> 2
+        else -> -1
+    }
+
     fun shellLaunch(
         paths: RuntimePaths,
         workDirInGuest: String = "/projects",
         extraBinds: List<Pair<File, String>> = emptyList(),
-        useLinker: Boolean = false
-    ): Launch = build(paths, workDirInGuest, extraBinds, listOf("/bin/bash", "--login"), useLinker)
+        useLinker: Boolean = false,
+        prootFile: File? = null
+    ): Launch = build(paths, workDirInGuest, extraBinds, listOf("/bin/bash", "--login"), useLinker, prootFile)
 
     /**
      * Fullscreen/interactive guest program (e.g. `opencode` TUI) on the
@@ -59,11 +72,12 @@ object ProotLauncher {
         guestCmd: List<String>,
         workDirInGuest: String = "/projects",
         extraBinds: List<Pair<File, String>> = emptyList(),
-        useLinker: Boolean = false
+        useLinker: Boolean = false,
+        prootFile: File? = null
     ): Launch = build(
         paths, workDirInGuest, extraBinds,
         listOf("/bin/bash", "--login", "-c", "exec " + guestCmd.joinToString(" ")),
-        useLinker
+        useLinker, prootFile
     )
 
     fun execLaunch(
@@ -71,21 +85,24 @@ object ProotLauncher {
         guestCmd: List<String>,
         workDirInGuest: String = "/projects",
         extraBinds: List<Pair<File, String>> = emptyList(),
-        useLinker: Boolean = false
-    ): Launch = build(paths, workDirInGuest, extraBinds, listOf("/bin/bash", "--login", "-c", guestCmd.joinToString(" ")), useLinker)
+        useLinker: Boolean = false,
+        prootFile: File? = null
+    ): Launch = build(paths, workDirInGuest, extraBinds, listOf("/bin/bash", "--login", "-c", guestCmd.joinToString(" ")), useLinker, prootFile)
 
     private fun build(
         paths: RuntimePaths,
         workDirInGuest: String,
         extraBinds: List<Pair<File, String>>,
         guest: List<String>,
-        useLinker: Boolean = false
+        useLinker: Boolean = false,
+        prootFile: File? = null
     ): Launch {
-        require(paths.prootBin.isFile) { "PRoot binary missing: ${paths.prootBin.absolutePath}" }
+        val proot = prootFile ?: paths.prootBin
+        require(proot.isFile) { "PRoot binary missing: ${proot.absolutePath}" }
         require(paths.rootfs.isDirectory) { "Ubuntu rootfs missing: ${paths.rootfs.absolutePath}" }
         val argv = mutableListOf<String>()
         val prootArgs = mutableListOf<String>()
-        prootArgs += paths.prootBin.absolutePath
+        prootArgs += proot.absolutePath
         prootArgs += "-r"; prootArgs += paths.rootfs.absolutePath
         prootArgs += "-0" // fake root inside guest
         prootArgs += "--kernel-release=$KERNEL_RELEASE"

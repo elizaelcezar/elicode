@@ -466,6 +466,7 @@ fun DiagnosticsScreen(graph: AppGraph) {
                 val text = buildString {
                     appendLine("EliCode diagnostics — ${appVersion(context)}")
                     appendLine("Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
+                    appendLine("Device: ${Build.MANUFACTURER} ${Build.MODEL}")
                     appendLine("ABIs: ${Build.SUPPORTED_ABIS?.joinToString()}")
                     appendLine("Runtime installed: ${status.installed} (v${status.version}), free ${status.freeBytes / 1_000_000}MB")
                     appendLine("--- core checks ---")

@@ -40,17 +40,32 @@ class RuntimePaths(context: Context) {
     private val linkerModeFile: File = File(runtime, "linker-mode")
 
     /**
-     * True when this device denies direct exec of the PRoot binary
-     * (error=13) and every launch must go through the system linker
-     * (read-only workaround). Set by the installer's proot smoke test.
+     * PRoot binary bundled in the APK (lib/proot_exec.so, extracted by the
+     * package manager into the native-library dir). Last-resort exec
+     * location when the device denies exec on app-private files.
      */
-    fun useLinker(): Boolean =
-        runCatching { linkerModeFile.isFile && linkerModeFile.readText().trim() == "1" }
-            .getOrDefault(false)
+    val bundledProot: File =
+        File(context.applicationInfo.nativeLibraryDir, "libproot_exec.so")
 
-    fun writeLinkerMode(use: Boolean) {
-        runCatching { linkerModeFile.writeText(if (use) "1" else "0") }
+    /**
+     * Proot invocation mode: 0=direct filesDir binary, 1=system linker +
+     * filesDir binary, 2=system linker + APK-bundled binary, -1=unset
+     * (try direct first). Set by the installer's proot smoke test.
+     */
+    fun prootMode(): Int =
+        runCatching { if (linkerModeFile.isFile) linkerModeFile.readText().trim().toInt() else -1 }
+            .getOrDefault(-1)
+
+    fun writeProotMode(mode: Int) {
+        runCatching { linkerModeFile.writeText(mode.toString()) }
     }
+
+    /** Effective binary for launches (bundled .so only when mode==2). */
+    fun effectiveProot(): File =
+        if (prootMode() == 2) bundledProot.takeIf { it.isFile } ?: prootBin else prootBin
+
+    /** True when launches must go through the system linker (modes 1-2). */
+    fun useLinker(): Boolean = prootMode() >= 1
 
     fun installedVersion(): Int {
         if (!versionFile.isFile) return 0

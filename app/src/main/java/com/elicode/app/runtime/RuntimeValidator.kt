@@ -88,15 +88,17 @@ class RuntimeValidator(context: Context, private val paths: RuntimePaths) {
 
     private fun prootVersion(): String {
         if (!paths.prootBin.isFile) return ""
+        val bin = paths.effectiveProot()
+        if (!bin.isFile) return ""
         val argv = if (paths.useLinker()) {
             val arch = ArchSupport.selectArch(Build.SUPPORTED_ABIS?.toList().orEmpty())
             val linker = ProotLauncher.systemLinker(arch.ifBlank { ArchSupport.ARM64 })
             listOf(
                 linker.absolutePath, "--library-path",
-                paths.toolsLib.absolutePath, paths.prootBin.absolutePath, "--version"
+                paths.toolsLib.absolutePath, bin.absolutePath, "--version"
             )
         } else {
-            listOf(paths.prootBin.absolutePath, "--version")
+            listOf(bin.absolutePath, "--version")
         }
         val r = Execs.run(
             runner,
@@ -111,7 +113,10 @@ class RuntimeValidator(context: Context, private val paths: RuntimePaths) {
 
     private fun guestEcho(): String {
         return try {
-            val launch = ProotLauncher.execLaunch(paths, listOf("echo", "elicode-ok"), useLinker = paths.useLinker())
+            val launch = ProotLauncher.execLaunch(
+                paths, listOf("echo", "elicode-ok"),
+                useLinker = paths.useLinker(), prootFile = paths.effectiveProot()
+            )
             val r = Execs.run(runner, launch.argv, null, launch.env, "guest echo", 60_000L)
             val ok = r as? EliResult.Ok ?: return ""
             if (ok.value.exitCode == 0) ok.value.stdout.trim() else ""
@@ -124,7 +129,7 @@ class RuntimeValidator(context: Context, private val paths: RuntimePaths) {
         return try {
             val launch = ProotLauncher.execLaunch(
                 paths, listOf("command", "-v", tool, "&&", tool, "--version"),
-                useLinker = paths.useLinker()
+                useLinker = paths.useLinker(), prootFile = paths.effectiveProot()
             )
             val r = Execs.run(runner, launch.argv, null, launch.env, "probe $tool", 60_000L)
             val ok = r as? EliResult.Ok ?: return null

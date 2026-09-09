@@ -30,4 +30,14 @@ class ProotLinkerTest {
         )
         assertTrue(argv[3].endsWith("proot"))
     }
+
+    @Test
+    fun pickModeCheapestFirst() {
+        assertEquals(0, ProotLauncher.pickMode(true, false, false))
+        assertEquals(0, ProotLauncher.pickMode(true, true, true))
+        assertEquals(1, ProotLauncher.pickMode(false, true, false))
+        assertEquals(1, ProotLauncher.pickMode(false, true, true))
+        assertEquals(2, ProotLauncher.pickMode(false, false, true))
+        assertEquals(-1, ProotLauncher.pickMode(false, false, false))
+    }
 }

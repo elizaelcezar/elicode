@@ -304,52 +304,81 @@ class RuntimeInstaller(
     private class InstallFail(val error: EliError) : Exception(error.format())
 
     /**
-     * Smoke-tests PRoot. When the device denies direct exec (error=13),
-     * falls back to an explicit system-linker invocation (read-only) and
-     * persists linker mode for all future launches on this device.
+     * Smoke-tests PRoot across invocation modes, cheapest first:
+     * direct exec → system linker on filesDir binary → system linker on
+     * the APK-bundled binary. Persists the winning mode. Every attempt's
+     * error is kept, so a total failure still tells the full story.
      */
     private fun testProot(listener: Listener, arch: String): String {
         val bin = paths.prootBin.absolutePath
         val lib = paths.toolsLib.absolutePath
+        val linker = ProotLauncher.systemLinker(arch.ifBlank { ArchSupport.ARM64 })
         val chmodOk = paths.prootBin.setExecutable(true, false)
         stage(
             listener, "proot-test", 0.2f,
             "Testing PRoot… (chmod +x ${if (chmodOk) "ok" else "FAILED"})"
         )
-        val direct = Execs.run(
-            runner, listOf(bin, "--version"), null,
-            mapOf("LD_LIBRARY_PATH" to lib), "proot --version", 30_000L
-        )
-        val directOut = (direct as? EliResult.Ok)?.value?.combined.orEmpty()
-        if (direct is EliResult.Ok && directOut.contains("proot", ignoreCase = true)) {
-            paths.writeLinkerMode(false)
-            return directOut
-        }
-        val directErr = (direct as? EliResult.Err)?.error
-        val denied = directErr?.message?.contains("Permission denied", ignoreCase = true) == true ||
-            directErr?.message?.contains("error=13") == true
-        if (denied) {
-            stage(listener, "proot-test", 0.2f, "Direct exec denied — trying system linker…")
-            val linker = ProotLauncher.systemLinker(arch.ifBlank { ArchSupport.ARM64 })
-            val via = Execs.run(
-                runner,
-                listOf(linker.absolutePath, "--library-path", lib, bin, "--version"),
-                null, mapOf("LD_LIBRARY_PATH" to lib), "proot --version (linker)", 30_000L
+        fun probe(argv: List<String>, label: String): Pair<String?, String?> {
+            val r = Execs.run(
+                runner, argv, null,
+                mapOf("LD_LIBRARY_PATH" to lib), label, 30_000L
             )
-            val viaOut = (via as? EliResult.Ok)?.value?.combined.orEmpty()
-            if (via is EliResult.Ok && viaOut.contains("proot", ignoreCase = true)) {
-                paths.writeLinkerMode(true)
-                stage(listener, "proot-test", 0.2f, "Linker mode enabled for this device.")
-                return viaOut
+            val ok = r as? EliResult.Ok
+            val out = ok?.value?.combined.orEmpty()
+            return if (ok != null && ok.value.exitCode == 0 &&
+                out.contains("proot", ignoreCase = true)
+            ) {
+                out to null
+            } else {
+                null to ((r as? EliResult.Err)?.error?.format() ?: out.ifBlank { "no output" })
             }
+        }
+
+        val (directOut, directErr) = probe(listOf(bin, "--version"), "proot --version")
+        var filesOut: String? = null
+        var filesErr: String? = "not tried"
+        if (directOut == null) {
+            stage(listener, "proot-test", 0.2f, "Direct exec denied — trying system linker…")
+            val (o, e) = probe(
+                listOf(linker.absolutePath, "--library-path", lib, bin, "--version"),
+                "proot --version (linker)"
+            )
+            filesOut = o
+            filesErr = e
+        }
+        var soOut: String? = null
+        var soErr: String? = "not tried"
+        val so = paths.bundledProot
+        if (directOut == null && filesOut == null && so.isFile) {
+            stage(listener, "proot-test", 0.2f, "Linker denied too — trying APK-bundled proot…")
+            val (o, e) = probe(
+                listOf(linker.absolutePath, "--library-path", lib, so.absolutePath, "--version"),
+                "proot --version (bundled)"
+            )
+            soOut = o
+            soErr = e
+        }
+        val mode = ProotLauncher.pickMode(directOut != null, filesOut != null, soOut != null)
+        if (mode >= 0) {
+            paths.writeProotMode(mode)
+            if (mode > 0) {
+                stage(
+                    listener, "proot-test", 0.2f,
+                    if (mode == 1) "Linker mode enabled for this device."
+                    else "APK-bundled proot mode enabled for this device."
+                )
+            }
+            return (listOfNotNull(directOut, filesOut, soOut).firstOrNull()).orEmpty()
         }
         throw InstallFail(
             EliError(
                 operation = "Test PRoot",
                 command = "$bin --version",
-                message = ((direct as? EliResult.Err)?.error?.format() ?: directOut) +
-                    "\n" + execDiagnostics(),
-                probableCause = "PRoot cannot execute (missing libs or kernel restriction).",
+                message = "direct: ${(directErr ?: "?").take(400)}\n" +
+                    "linker(filesDir): ${(filesErr ?: "?").take(400)}\n" +
+                    "linker(bundled): ${(soErr ?: "?").take(400)}\n" +
+                    execDiagnostics(),
+                probableCause = "This device blocks executing PRoot (all 3 invocation modes failed).",
                 suggestedFix = "Diagnostics → Copiar diagnóstico and share the log."
             )
         )
@@ -366,6 +395,11 @@ class RuntimeInstaller(
             "selinux-enforce: " + runCatching {
                 File("/sys/fs/selinux/enforce").readText().trim()
             }.getOrDefault("?") + " (1=enforcing)"
+        )
+        appendLine(
+            "selinux-ctx: " + runCatching {
+                File("/proc/self/attr/current").readText().trim()
+            }.getOrDefault("?")
         )
         appendLine(
             "mount: " + runCatching {
