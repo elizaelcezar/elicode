@@ -40,7 +40,10 @@ object ArchiveExtractor {
                 val header = ByteArray(60)
                 val read = readFully(fis, header, 60)
                 if (read < 60) break
-                val name = String(header, 0, 16).trim()
+                // GNU ar terminates short names with '/' ("data.tar.xz/"):
+                // strip it, or compression detection (.xz/.gz) fails and
+                // xz bytes get parsed as plain tar ("Corrupted TAR archive").
+                val name = String(header, 0, 16).trim().trimEnd('/')
                 val size = String(header, 48, 10).trim().toLong()
                 require(header[58] == 0x60.toByte() && header[59] == 0x0A.toByte()) {
                     "Corrupt ar header in ${deb.name}"
@@ -181,6 +184,14 @@ object ArchiveExtractor {
 
     const val EM_AARCH64 = 183
     const val EM_X86_64 = 62
+
+    /** Human-readable sizes for progress/errors (97KB debs read "0MB" otherwise). */
+    fun humanBytes(bytes: Long): String = when {
+        bytes < 0 -> "?"
+        bytes < 1024 -> "$bytes B"
+        bytes < 1024 * 1024 -> "${bytes / 1024} KB"
+        else -> "${bytes / (1024 * 1024)} MB"
+    }
 
     private class CountingInputStream(private val inner: InputStream) : InputStream() {
         var count = 0L

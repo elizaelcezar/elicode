@@ -380,7 +380,7 @@ class RuntimeInstaller(private val context: Context, val paths: RuntimePaths) {
             throw InstallFail(
                 EliError(
                     op,
-                    message = "${file.name} (${file.length() / 1_000_000}MB on disk): " +
+                    message = "${file.name} (${ArchiveExtractor.humanBytes(file.length())} on disk): " +
                         "${t.javaClass.simpleName}: ${t.message}",
                     probableCause = "The archive is truncated or corrupt.",
                     suggestedFix = "Config → Runtime → 'Clear downloads', then Install again."
@@ -437,8 +437,8 @@ class RuntimeInstaller(private val context: Context, val paths: RuntimePaths) {
             Net.downloadFirstAvailable(pkg.urls, dest, pkg.sha256, onProgress = { p ->
                 val f = if (p.fraction >= 0) from + (to - from) * p.fraction else from
                 val mb = if (p.bytesDone >= 0) {
-                    "${p.bytesDone / 1_000_000}MB" +
-                        (if (p.bytesTotal > 0) " / ${p.bytesTotal / 1_000_000}MB" else "")
+                    ArchiveExtractor.humanBytes(p.bytesDone) +
+                        (if (p.bytesTotal > 0) " / ${ArchiveExtractor.humanBytes(p.bytesTotal)}" else "")
                 } else "trying next mirror…"
                 listener.onStage(stage, f, "Downloading ${pkg.fileName}… $mb")
             }, isCancelled = { cancelled.get() })

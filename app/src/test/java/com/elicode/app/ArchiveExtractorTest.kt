@@ -58,6 +58,28 @@ class ArchiveExtractorTest {
     }
 
     @Test
+    fun extractDebGnuSlashNames() {
+        // Real GNU ar (Termux .debs) terminates short names with '/':
+        // "data.tar.xz/". A parser that only trim()s whitespace mistakes
+        // xz bytes for plain tar ("Corrupted TAR archive" on-device).
+        // NOTE: the payload must exceed one 512B tar record, otherwise the
+        // truncated stream ends silently instead of throwing like the
+        // real 97KB .deb does.
+        val rnd = java.util.Random(7)
+        val payload = ByteArray(4096).also { rnd.nextBytes(it) }
+        val tarXz = buildTarXz(mapOf("./usr/bin/proot" to payload))
+        val deb = File(tmp.root, "gnu.deb")
+        writeAr(deb, mapOf("debian-binary/" to "2.0\n".toByteArray(), "data.tar.xz/" to tarXz))
+
+        val out = File(tmp.root, "out-gnu")
+        ArchiveExtractor.extractDeb(deb, out)
+
+        val proot = File(out, "usr/bin/proot")
+        assertTrue(proot.isFile)
+        assertEquals(payload.toList(), proot.readBytes().toList())
+    }
+
+    @Test
     fun extractDebStreamsLargeMember() {
         // 2MB of incompressible payload: proves the member is streamed,
         // not buffered whole into RAM (OOM safety on phones).
@@ -110,6 +132,25 @@ class ArchiveExtractorTest {
     }
 
     // ---------- helpers ----------
+
+    private fun buildTarXz(entries: Map<String, ByteArray>): ByteArray {
+        val bos = ByteArrayOutputStream()
+        org.tukaani.xz.XZOutputStream(bos, org.tukaani.xz.LZMA2Options()).use { xz ->
+            TarArchiveOutputStream(xz).use { tar ->
+                tar.setLongFileMode(TarArchiveOutputStream.LONGFILE_POSIX)
+                entries.forEach { (name, bytes) ->
+                    val e = TarArchiveEntry(name)
+                    e.size = bytes.size.toLong()
+                    e.mode = 493 // 0755
+                    tar.putArchiveEntry(e)
+                    tar.write(bytes)
+                    tar.closeArchiveEntry()
+                }
+                tar.finish()
+            }
+        }
+        return bos.toByteArray()
+    }
 
     private fun buildTarGz(entries: Map<String, ByteArray>): ByteArray {
         val bos = ByteArrayOutputStream()
