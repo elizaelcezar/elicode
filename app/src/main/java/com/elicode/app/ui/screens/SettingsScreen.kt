@@ -452,23 +452,51 @@ fun DiagnosticsScreen(graph: AppGraph) {
             }.takeLast(12000)
         )
         androidx.compose.foundation.layout.Spacer(Modifier.padding(4.dp))
-        OutlinedButton(onClick = {
-            scope.launch(Dispatchers.IO) {
-                val file = graph.logs.export()
-                val uri = androidx.core.content.FileProvider.getUriForFile(
-                    context, "${context.packageName}.fileprovider", file
-                )
-                val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                    type = "text/plain"
-                    putExtra(android.content.Intent.EXTRA_STREAM, uri)
-                    addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }
-                runCatching {
-                    context.startActivity(
-                        android.content.Intent.createChooser(intent, "Share diagnostics log")
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = {
+                val text = buildString {
+                    appendLine("EliCode diagnostics — ${appVersion(context)}")
+                    appendLine("Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
+                    appendLine("ABIs: ${Build.SUPPORTED_ABIS?.joinToString()}")
+                    appendLine("Runtime installed: ${status.installed} (v${status.version}), free ${status.freeBytes / 1_000_000}MB")
+                    appendLine("--- core checks ---")
+                    status.coreChecks.forEach { c ->
+                        appendLine("${if (c.ok) "OK " else "FAIL"} ${c.name}: ${c.detail.take(200)}")
+                    }
+                    appendLine("--- tools ---")
+                    status.toolChecks.forEach { c ->
+                        appendLine("${if (c.ok) "OK " else ".. "} ${c.name}: ${c.detail.take(120)}")
+                    }
+                    status.lastError?.let { appendLine("--- last error ---\n${it.format()}") }
+                    appendLine("--- recent log ---")
+                    append(
+                        graph.logs.snapshot(null).takeLast(30).joinToString("\n") {
+                            "[${it.category}/${it.tag}] ${it.message.take(300)}"
+                        }
                     )
+                }.take(20000)
+                val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                cm.setPrimaryClip(ClipData.newPlainText("elicode-diagnostics", text))
+                Toast.makeText(context, "Diagnóstico copiado — pode colar", Toast.LENGTH_SHORT).show()
+            }) { Text("📋 Copiar diagnóstico") }
+            OutlinedButton(onClick = {
+                scope.launch(Dispatchers.IO) {
+                    val file = graph.logs.export()
+                    val uri = androidx.core.content.FileProvider.getUriForFile(
+                        context, "${context.packageName}.fileprovider", file
+                    )
+                    val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                        addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    runCatching {
+                        context.startActivity(
+                            android.content.Intent.createChooser(intent, "Share diagnostics log")
+                        )
+                    }
                 }
-            }
-        }) { Text("Share log file") }
+            }) { Text("Share log file") }
+        }
     }
 }

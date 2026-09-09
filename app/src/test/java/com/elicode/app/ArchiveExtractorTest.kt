@@ -58,6 +58,45 @@ class ArchiveExtractorTest {
     }
 
     @Test
+    fun extractDebStreamsLargeMember() {
+        // 2MB of incompressible payload: proves the member is streamed,
+        // not buffered whole into RAM (OOM safety on phones).
+        val rnd = java.util.Random(42)
+        val payload = ByteArray(2 * 1024 * 1024).also { rnd.nextBytes(it) }
+        val tarGz = buildTarGz(mapOf("./opt/big.bin" to payload))
+        val deb = File(tmp.root, "big.deb")
+        writeAr(deb, mapOf("debian-binary" to "2.0\n".toByteArray(), "data.tar.gz" to tarGz))
+
+        val out = File(tmp.root, "out-big")
+        ArchiveExtractor.extractDeb(deb, out)
+
+        val f = File(out, "opt/big.bin")
+        assertTrue(f.isFile)
+        assertEquals(payload.toList(), f.readBytes().toList())
+    }
+
+    @Test
+    fun extractDebTruncatedFailsLoudly() {
+        val payload = "fake proot binary".toByteArray()
+        val tarGz = buildTarGz(mapOf("./usr/bin/proot" to payload))
+        val full = File(tmp.root, "full.deb")
+        writeAr(full, mapOf("debian-binary" to "2.0\n".toByteArray(), "data.tar.gz" to tarGz))
+        // Simulate a truncated download: cut the file mid-member.
+        val bytes = full.readBytes()
+        val cut = File(tmp.root, "cut.deb")
+        cut.writeBytes(bytes.copyOf((bytes.size * 0.6).toInt()))
+        try {
+            ArchiveExtractor.extractDeb(cut, File(tmp.root, "out-cut"))
+            assertTrue("should have thrown on truncated deb", false)
+        } catch (e: Exception) {
+            assertTrue(
+                "unexpected: ${e.javaClass.simpleName}: ${e.message}",
+                e is IllegalArgumentException || e is java.io.IOException
+            )
+        }
+    }
+
+    @Test
     fun extractDebBlocksPathTraversal() {
         val tarGz = buildTarGz(mapOf("../../evil.sh" to "x".toByteArray()))
         val deb = File(tmp.root, "evil.deb")

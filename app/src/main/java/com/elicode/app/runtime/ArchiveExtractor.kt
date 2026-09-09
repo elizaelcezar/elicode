@@ -35,11 +35,10 @@ object ArchiveExtractor {
             require(fis.read(magic) == 8 && String(magic) == "!<arch>\n") {
                 "Not an ar archive: ${deb.name}"
             }
-            var dataBytes: ByteArray? = null
-            var dataName = ""
-            while (true) {
+            var extracted = false
+            while (!extracted) {
                 val header = ByteArray(60)
-                val read = fis.read(header)
+                val read = readFully(fis, header, 60)
                 if (read < 60) break
                 val name = String(header, 0, 16).trim()
                 val size = String(header, 48, 10).trim().toLong()
@@ -47,27 +46,20 @@ object ArchiveExtractor {
                     "Corrupt ar header in ${deb.name}"
                 }
                 if (name.startsWith("data.tar")) {
-                    dataName = name
-                    dataBytes = ByteArray(size.toInt())
-                    var off = 0
-                    while (off < size) {
-                        val n = fis.read(dataBytes, off, (size - off).toInt())
-                        if (n < 0) throw java.io.IOException("Truncated data member in ${deb.name}")
-                        off += n
+                    // Stream the member straight into the decompressor:
+                    // no full-file RAM buffering (OOM safety on phones) and
+                    // no toInt() overflow cliff on large members.
+                    BoundedMemberStream(fis, size).use { bounded ->
+                        extractTar(bounded, name, destDir, onProgress)
+                        bounded.drain()
                     }
+                    extracted = true
                 } else {
-                    var skipped = 0L
-                    while (skipped < size) {
-                        val n = fis.skip(size - skipped)
-                        if (n <= 0) break
-                        skipped += n
-                    }
+                    skipFully(fis, size)
                 }
-                if (size % 2 == 1L) fis.skip(1) // ar 2-byte alignment
-                if (dataBytes != null) break
+                if (size % 2 == 1L) skipFully(fis, 1) // ar 2-byte alignment
             }
-            require(dataBytes != null) { "No data.tar.* member in ${deb.name}" }
-            extractTar(dataBytes.inputStream(), dataName, destDir, onProgress)
+            require(extracted) { "No data.tar.* member in ${deb.name} (truncated download?)" }
         }
         return destDir
     }
@@ -196,5 +188,66 @@ object ArchiveExtractor {
         override fun read(b: ByteArray, off: Int, len: Int): Int =
             inner.read(b, off, len).also { if (it > 0) count += it }
         override fun close() = inner.close()
+    }
+
+    /**
+     * Caps reads at [limit] bytes (one ar member). Decompressors must
+     * never read into the next member's header — the cap turns that
+     * over-read into a clean EOF.
+     */
+    private class BoundedMemberStream(
+        private val inner: InputStream,
+        private var remaining: Long
+    ) : InputStream() {
+        override fun read(): Int {
+            if (remaining <= 0) return -1
+            val n = inner.read()
+            if (n >= 0) remaining--
+            return n
+        }
+
+        override fun read(b: ByteArray, off: Int, len: Int): Int {
+            if (remaining <= 0) return -1
+            val n = inner.read(b, off, minOf(len.toLong(), remaining).toInt())
+            if (n > 0) remaining -= n
+            return n
+        }
+
+        /** Discards unread member bytes so the ar cursor stays aligned. */
+        fun drain() {
+            val scratch = ByteArray(8192)
+            while (remaining > 0) {
+                val n = inner.read(scratch, 0, minOf(scratch.size.toLong(), remaining).toInt())
+                if (n < 0) break
+                remaining -= n
+            }
+        }
+
+        override fun close() {
+            // Do NOT close [inner]: the ar walk continues after this member.
+        }
+    }
+
+    /** Reliable header reads: BufferedInputStream.read may short-read. */
+    private fun readFully(input: InputStream, buf: ByteArray, len: Int): Int {
+        var off = 0
+        while (off < len) {
+            val n = input.read(buf, off, len - off)
+            if (n < 0) break
+            off += n
+        }
+        return off
+    }
+
+    /** Reliable skips: InputStream.skip may return 0 before EOF. */
+    private fun skipFully(input: InputStream, n: Long) {
+        var left = n
+        val scratch = ByteArray(8192)
+        while (left > 0) {
+            val want = minOf(scratch.size.toLong(), left).toInt()
+            val r = input.read(scratch, 0, want)
+            if (r < 0) break
+            left -= r
+        }
     }
 }
