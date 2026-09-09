@@ -98,6 +98,56 @@ class ArchiveExtractorTest {
     }
 
     @Test
+    fun extractDebSymlinkBehaviorIsExplicit() {
+        // Symlink support is environment-dependent (Windows needs Dev
+        // Mode): assert SUCCESS where supported, and the loud failure
+        // (not a silently broken tree) where it is not.
+        val canLink = runCatching {
+            val t = File(tmp.root, "probe-target").apply { writeText("x") }
+            val l = File(tmp.root, "probe-link")
+            java.nio.file.Files.deleteIfExists(l.toPath())
+            java.nio.file.Files.createSymbolicLink(l.toPath(), t.toPath())
+            l.delete()
+            t.delete()
+            true
+        }.getOrDefault(false)
+
+        val bos = ByteArrayOutputStream()
+        GZIPOutputStream(bos).use { gz ->
+            TarArchiveOutputStream(gz).use { tar ->
+                tar.setLongFileMode(TarArchiveOutputStream.LONGFILE_POSIX)
+                val f = TarArchiveEntry("./real.txt")
+                val payload = "abc".toByteArray()
+                f.size = payload.size.toLong()
+                tar.putArchiveEntry(f)
+                tar.write(payload)
+                tar.closeArchiveEntry()
+                val l = TarArchiveEntry("./link.txt", TarArchiveEntry.LF_SYMLINK)
+                l.linkName = "real.txt"
+                tar.putArchiveEntry(l)
+                tar.closeArchiveEntry()
+                tar.finish()
+            }
+        }
+        val deb = File(tmp.root, "link.deb")
+        writeAr(deb, mapOf("data.tar.gz" to bos.toByteArray()))
+
+        val out = File(tmp.root, "out-link")
+        if (canLink) {
+            ArchiveExtractor.extractDeb(deb, out)
+            assertTrue(java.nio.file.Files.isSymbolicLink(File(out, "link.txt").toPath()))
+            assertEquals("abc", File(out, "link.txt").readText())
+        } else {
+            try {
+                ArchiveExtractor.extractDeb(deb, out)
+                org.junit.Assert.fail("expected loud symlink failure")
+            } catch (e: IllegalArgumentException) {
+                assertTrue(e.message!!.contains("Symlink creation failed"))
+            }
+        }
+    }
+
+    @Test
     fun extractDebTruncatedFailsLoudly() {
         val payload = "fake proot binary".toByteArray()
         val tarGz = buildTarGz(mapOf("./usr/bin/proot" to payload))

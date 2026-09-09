@@ -29,7 +29,7 @@ class RuntimeManager(
     val interactiveRunner: ProcessRunner = defaultProcessRunner(usePty = true)
     val registry = ProcessRegistry()
     val installer = RuntimeInstaller(context, paths, log)
-    val validator = RuntimeValidator(context, paths)
+    val validator = RuntimeValidator(context, paths, log)
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 

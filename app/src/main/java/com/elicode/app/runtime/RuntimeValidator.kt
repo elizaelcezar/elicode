@@ -11,7 +11,11 @@ import java.io.File
  * Tool checks (git/node/java/...) are informational: missing tools
  * map to optional toolchain installs, not to a broken runtime.
  */
-class RuntimeValidator(context: Context, private val paths: RuntimePaths) {
+class RuntimeValidator(
+    context: Context,
+    private val paths: RuntimePaths,
+    private val log: (category: String, tag: String, message: String) -> Unit = { _, _, _ -> }
+) {
 
     data class Check(
         val name: String,
@@ -57,8 +61,17 @@ class RuntimeValidator(context: Context, private val paths: RuntimePaths) {
                 else -> "rootfs/bin/bash AND usr/bin/bash missing — rootfs incomplete"
             }
         )
-        val echo = guestEcho()
-        out += Check("guest-bash", echo == "elicode-ok", "bash echo -> '$echo'")
+        val echo = guestEchoFull()
+        log(
+            "Runtime", "guest-probe",
+            "exit=${echo.exitCode} out='${echo.stdout.trim().take(300)}' " +
+                "err='${echo.stderr.trim().take(500)}'"
+        )
+        out += Check(
+            "guest-bash", echo.stdout.trim() == "elicode-ok",
+            "exit=${echo.exitCode} out='${echo.stdout.trim().take(120)}' " +
+                "err='${echo.stderr.trim().take(200)}'"
+        )
         out += Check(
             "native-pty", NativeBridge.AVAILABLE,
             if (NativeBridge.AVAILABLE) "libelicode_bridge.so loaded (real PTY + ^C)"
@@ -108,17 +121,22 @@ class RuntimeValidator(context: Context, private val paths: RuntimePaths) {
         return if (ok.value.exitCode == 0) ok.value.combined.trim() else ""
     }
 
-    private fun guestEcho(): String {
+    /** Full guest probe result (exit + streams) — never swallows evidence. */
+    private fun guestEchoFull(): ProcResult {
         return try {
             val launch = ProotLauncher.execLaunch(
                 paths, listOf("echo", "elicode-ok"),
                 useLinker = paths.useLinker(), prootFile = paths.effectiveProot()
             )
             val r = Execs.run(runner, launch.argv, null, launch.env, "guest echo", 60_000L)
-            val ok = r as? EliResult.Ok ?: return ""
-            if (ok.value.exitCode == 0) ok.value.stdout.trim() else ""
-        } catch (_: Throwable) {
-            ""
+            when (r) {
+                is EliResult.Ok -> r.value
+                is EliResult.Err -> ProcResult(
+                    -1, "", "start failed: ${r.error.format().take(500)}"
+                )
+            }
+        } catch (t: Throwable) {
+            ProcResult(-1, "", "exception: ${t.javaClass.simpleName}: ${t.message}")
         }
     }
 

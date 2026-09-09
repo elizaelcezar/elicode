@@ -117,6 +117,8 @@ object ArchiveExtractor {
         val base = destDir.canonicalFile
         var entries = 0
         var bytesOut = 0L
+        var symlinkFails = 0
+        var firstSymlinkFail = ""
         var entry = tar.nextEntry
         while (entry != null) {
             val e = entry as TarArchiveEntry
@@ -130,9 +132,13 @@ object ArchiveExtractor {
                     e.isDirectory -> target.mkdirs()
                     e.isSymbolicLink -> {
                         target.parentFile?.mkdirs()
-                        runCatching { Files.deleteIfExists(target.toPath()) }
-                        runCatching {
+                        val ok = runCatching {
+                            Files.deleteIfExists(target.toPath())
                             Files.createSymbolicLink(target.toPath(), java.nio.file.Paths.get(e.linkName))
+                        }.isSuccess
+                        if (!ok) {
+                            symlinkFails++
+                            if (firstSymlinkFail.isEmpty()) firstSymlinkFail = "$rel -> ${e.linkName}"
                         }
                     }
                     e.isFile -> {
@@ -151,6 +157,10 @@ object ArchiveExtractor {
                 onProgress(Progress(entries, bytesOut, b))
             }
             entry = tar.nextEntry
+        }
+        require(symlinkFails == 0) {
+            "Symlink creation failed $symlinkFails time(s) (first: $firstSymlinkFail) — " +
+                "the filesystem may not support symlinks, leaving a broken tree."
         }
         val (a, b) = bytesHint()
         onProgress(Progress(entries, bytesOut, b))

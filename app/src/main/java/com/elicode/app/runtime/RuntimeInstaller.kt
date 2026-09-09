@@ -183,7 +183,7 @@ class RuntimeInstaller(
 
             checkCancel()
             stage(listener, "verify", 0.9f, "Verifying runtime…")
-            val report = RuntimeValidator(context, paths).validateCore()
+            val report = RuntimeValidator(context, paths, log).validateCore()
             val failed = report.filter { it.required && !it.ok }
             if (failed.isNotEmpty()) {
                 throw InstallFail(
@@ -262,7 +262,7 @@ class RuntimeInstaller(
                 }
             }
             configureRootfs()
-            val report = RuntimeValidator(context, paths).validateCore()
+            val report = RuntimeValidator(context, paths, log).validateCore()
             val failed = report.filter { it.required && !it.ok }
             if (failed.isNotEmpty()) {
                 throw InstallFail(EliError("Repair runtime",
