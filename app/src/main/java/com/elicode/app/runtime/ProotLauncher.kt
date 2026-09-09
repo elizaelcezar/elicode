@@ -138,10 +138,11 @@ object ProotLauncher {
         }
         val env = mapOf(
             "LD_LIBRARY_PATH" to paths.toolsLib.absolutePath,
+            // THE tmpdir variable this proot build honors (verified in the
+            // binary strings: "Please set PROOT_TMP_DIR env. variable").
+            // PROOT_TMPDIR/TMPDIR are ignored by it — kept for other tools.
+            "PROOT_TMP_DIR" to paths.tmp.absolutePath,
             "PROOT_TMPDIR" to paths.tmp.absolutePath,
-            // PRoot's Termux build only honors TMPDIR for its scratch dir
-            // (f2fs probe + child temp dirs); without it proot dies with
-            // "can't create temporary directory" on its baked-in path.
             "TMPDIR" to paths.tmp.absolutePath,
             "HOME" to "/root",
             "TERM" to "xterm-256color",
