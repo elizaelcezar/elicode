@@ -168,7 +168,8 @@ object ProotLauncher {
         )
         // ELF loader override (see loaderEnv): without it proot falls
         // back to its compiled-in Termux path, which never exists here.
-        env.putAll(loaderEnv(paths.loaderBin, paths.loader32Bin))
+        // Effective (APK-bundled, exec-allowed) copy wins; tools/ is fallback.
+        env.putAll(loaderEnv(paths.effectiveLoader(), paths.effectiveLoader32()))
         return Launch(argv, env)
     }
 

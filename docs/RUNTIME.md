@@ -52,12 +52,18 @@ proot -r rootfs -0 --kernel-release=5.15.0 \
 `-0` = fakeroot (apt/dpkg-friendly, no Android root needed).
 
 Every launch exports `PROOT_LOADER` (+ `PROOT_LOADER_32`) pointing
-at `tools/loader`. The Termux proot build defaults to
+at the **effective** loader: the APK-bundled copy
+(`jniLibs/*/libproot_loader*.so`, extracted to the exec-allowed
+native-library dir) wins; the installer-extracted `tools/loader`
+is fallback. The Termux proot build defaults to
 `/data/data/com.termux/.../libexec/proot/loader`, which never exists
 under EliCode's app id — without the override, guest exec fails with
 `execve("/usr/bin/bash")` ENOENT ("the loader was not found") even
-when bash is present. The installer copies both helpers out of the
-proot `.deb` (`libexec/proot/loader*`); older builds discarded them.
+when bash is present. A `tools/`-only loader fixes ENOENT but still
+gets `Permission denied` on W^X devices (targetSdk 29+, e.g. Android
+16), which deny exec on app-private files — hence the bundled copy.
+The installer copies both helpers out of the proot `.deb`
+(`libexec/proot/loader*`); builds ≤ 0.2.1 discarded them.
 
 Guest INTERP chain (Ubuntu 22.04 merged-/usr): bash asks for
 `/lib/ld-linux-aarch64.so.1` (x86_64: `ld-linux-x86-64.so.2`);

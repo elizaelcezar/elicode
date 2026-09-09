@@ -47,12 +47,14 @@ class RuntimeValidator(
             prootVersion().isNotBlank(),
             prootVersion().ifBlank { "proot --version failed" }
         )
+        val effLoader = paths.effectiveLoader()
         out += Check(
-            "proot-loader", paths.loaderBin.isFile,
-            "loader=${paths.loaderBin.isFile} size=${paths.loaderBin.length()} " +
-                "exec=${paths.loaderBin.canExecute()} " +
-                "loader32=${paths.loader32Bin.isFile} " +
-                "(PROOT_LOADER unset → guest execve ENOENT even with bash present)"
+            "proot-loader", effLoader.isFile,
+            "effective=${effLoader.absolutePath} isFile=${effLoader.isFile} " +
+                "exec=${effLoader.canExecute()} " +
+                "bundled=${paths.bundledLoader.isFile} tools=${paths.loaderBin.isFile} " +
+                "loader32=${paths.effectiveLoader32().isFile} " +
+                "(missing → guest execve ENOENT; filesDir-only → Permission denied under W^X)"
         )
         val bash = File(paths.rootfs, "bin/bash")
         val bashUsr = File(paths.rootfs, "usr/bin/bash")

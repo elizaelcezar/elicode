@@ -60,6 +60,19 @@ class RuntimePaths(context: Context) {
         File(context.applicationInfo.nativeLibraryDir, "libproot_exec.so")
 
     /**
+     * Loader helpers bundled in the APK (libproot_loader.so /
+     * libproot_loader32.so in jniLibs, extracted into the
+     * native-library dir). Preferred PROOT_LOADER location: unlike
+     * filesDir, the native-library dir is exec-allowed under W^X
+     * (targetSdk 29+), so guest exec works where tools/loader gets
+     * "Permission denied".
+     */
+    val bundledLoader: File =
+        File(context.applicationInfo.nativeLibraryDir, "libproot_loader.so")
+    val bundledLoader32: File =
+        File(context.applicationInfo.nativeLibraryDir, "libproot_loader32.so")
+
+    /**
      * Proot invocation mode: 0=direct filesDir binary, 1=system linker +
      * filesDir binary, 2=system linker + APK-bundled binary, -1=unset
      * (try direct first). Set by the installer's proot smoke test.
@@ -75,6 +88,18 @@ class RuntimePaths(context: Context) {
     /** Effective binary for launches (bundled .so only when mode==2). */
     fun effectiveProot(): File =
         if (prootMode() == 2) bundledProot.takeIf { it.isFile } ?: prootBin else prootBin
+
+    /**
+     * Effective loader for PROOT_LOADER: the APK-bundled copy wins
+     * (exec-allowed native-library dir); falls back to the
+     * installer-extracted tools/ copy on devices without the bundle.
+     */
+    fun effectiveLoader(): File =
+        bundledLoader.takeIf { it.isFile } ?: loaderBin
+
+    /** Same preference for the 32-bit loader (PROOT_LOADER_32). */
+    fun effectiveLoader32(): File =
+        bundledLoader32.takeIf { it.isFile } ?: loader32Bin
 
     /** True when launches must go through the system linker (modes 1-2). */
     fun useLinker(): Boolean = prootMode() >= 1
