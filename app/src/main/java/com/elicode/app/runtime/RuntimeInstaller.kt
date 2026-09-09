@@ -688,12 +688,23 @@ class RuntimeInstaller(
             .forEach { so -> so.copyTo(File(paths.toolsLib, so.name), overwrite = true) }
     }
 
+    /**
+     * Ubuntu-base ships an EMPTY etc/resolv.conf (0 bytes): a mere
+     * existence check leaves the guest without DNS, so every apt
+     * install fails with "no installation candidate". Pure —
+     * unit-tested.
+     */
+    object DnsPolicy {
+        fun needsWrite(resolv: File): Boolean =
+            !resolv.isFile || resolv.length() == 0L
+    }
+
     private fun configureRootfs() {
         // DNS inside Ubuntu.
         val resolv = File(paths.rootfs, "etc/resolv.conf")
         runCatching {
             resolv.parentFile?.mkdirs()
-            if (!resolv.isFile) resolv.writeText("nameserver 1.1.1.1\nnameserver 8.8.8.8\n")
+            if (DnsPolicy.needsWrite(resolv)) resolv.writeText("nameserver 1.1.1.1\nnameserver 8.8.8.8\n")
         }
         paths.home.mkdirs()
         paths.tmp.mkdirs()
