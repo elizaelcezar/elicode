@@ -59,7 +59,11 @@ is fallback. Launches also set `PROOT_NO_SECCOMP=1` (pure-ptrace
 mode): proot's seccomp accelerator breaks `chmod` of the loader
 transfer file (`can't chmod .../tmp/proot-XXXXXX`) on newer Android
 kernels, leaving the temp loader non-executable so guest exec fails
-with `Permission denied`. The Termux proot build defaults to
+with `Permission denied`. The manifest sets
+`extractNativeLibs="true"` (AGP merges `false` by default):
+without extraction the bundled loader never lands in
+`nativeLibraryDir` and every launch silently falls back to the
+W^X-denied `tools/` copy. The Termux proot build defaults to
 `/data/data/com.termux/.../libexec/proot/loader`, which never exists
 under EliCode's app id — without the override, guest exec fails with
 `execve("/usr/bin/bash")` ENOENT ("the loader was not found") even
