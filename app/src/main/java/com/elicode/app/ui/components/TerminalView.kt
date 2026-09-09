@@ -50,6 +50,14 @@ import java.io.File
 enum class TermMode { OPENCODE, SHELL }
 
 /**
+ * Splits pasted multi-line input into commands. The input field is
+ * multi-line (singleLine=true silently drops every line after the
+ * first on paste). Pure — unit-tested.
+ */
+fun splitInput(raw: String): List<String> =
+    raw.lines().map { it.trimEnd() }.filter { it.isNotBlank() }
+
+/**
  * Real Linux terminal: an interactive shell process (guest bash via PRoot
  * when installed, host `sh` otherwise) with streaming output, stdin input,
  * destructive-command confirmation and restart/kill controls.
@@ -213,30 +221,36 @@ class TerminalController(
     }
 
     fun send(raw: String) {
-        val cmd = raw.trimEnd()
-        if (cmd.isEmpty()) return
-        if (Shell.isDestructive(cmd)) {
-            pendingConfirm.value = cmd
+        val cmds = splitInput(raw)
+        if (cmds.isEmpty()) return
+        if (cmds.any { Shell.isDestructive(it) }) {
+            pendingConfirm.value = cmds.joinToString("\n")
             return
         }
-        deliver(cmd)
+        deliverAll(cmds)
     }
 
     fun confirmSend() {
-        pendingConfirm.value?.let { deliver(it) }
+        pendingConfirm.value?.let { batch ->
+            deliverAll(splitInput(batch))
+        }
         pendingConfirm.value = null
     }
 
-    private fun deliver(cmd: String) {
+    private fun deliver(cmd: String) = deliverAll(listOf(cmd))
+
+    private fun deliverAll(cmds: List<String>) {
         val p = shell
         if (p == null || !p.isAlive) {
             emit("\n[shell not running — restarting]\n")
             start()
-            main.postDelayed({ shell?.writeStdin(cmd + "\n") }, 600)
+            main.postDelayed({ cmds.forEach { shell?.writeStdin(it + "\n") } }, 600)
             return
         }
-        emit("$ $cmd\n")
-        p.writeStdin(cmd + "\n")
+        cmds.forEach { cmd ->
+            emit("$ $cmd\n")
+            p.writeStdin(cmd + "\n")
+        }
     }
 
     fun interrupt() {
@@ -362,7 +376,8 @@ fun TerminalView(
                     value = input,
                     onValueChange = { input = it },
                     modifier = Modifier.weight(1f),
-                    singleLine = true,
+                    singleLine = false,
+                    maxLines = 5,
                     textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
                     label = { Text("$") }
                 )

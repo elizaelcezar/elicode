@@ -64,22 +64,29 @@ class NativeManagedProcess(
     }
 
     override val pid: Long get() =
-        runCatching { NativeBridge.nativePid(handle).toLong() }.getOrDefault(-1L)
+        if (closed.get()) -1L
+        else runCatching { NativeBridge.nativePid(handle).toLong() }.getOrDefault(-1L)
 
     override val isAlive: Boolean get() = !exited.get()
 
+    /** True once the native handle was freed: no more native calls. */
+    private fun isUsable(): Boolean = !exited.get() && !closed.get()
+
     @Synchronized
     override fun writeStdin(text: String) {
+        if (!isUsable()) return
         runCatching {
             NativeBridge.nativeWrite(handle, text.toByteArray(Charsets.UTF_8))
         }
     }
 
     override fun closeStdin() {
+        if (!isUsable()) return
         runCatching { NativeBridge.nativeCloseStdin(handle) }
     }
 
     override fun interrupt() {
+        if (!isUsable()) return
         val sent = runCatching { NativeBridge.nativeInterrupt(handle) }.getOrDefault(false)
         if (!sent) {
             // Fallback: ETX through the tty line discipline (becomes SIGINT).
@@ -88,12 +95,17 @@ class NativeManagedProcess(
     }
 
     override fun kill() {
+        // Never touch a freed handle: nativeClose() already deleted the
+        // struct, so nativeKillTree() would be a use-after-free
+        // (instant native crash with no Java stack trace).
+        if (!isUsable()) return
         Thread({
             runCatching { NativeBridge.nativeKillTree(handle) }
         }, "elic-nkill-$label").apply { isDaemon = true }.start()
     }
 
     override fun waitFor(): Int {
+        if (exited.get()) return exitCode
         return try {
             var code = NativeBridge.nativeWait(handle, 1000)
             while (code == NativeBridge.WAIT_RUNNING) {
