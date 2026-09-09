@@ -14,7 +14,7 @@ EliCode turns an ARM64 Android phone into a self-contained IDE:
 
 ## Requirements
 
-- Android 9+ (API 28), **ARM64 (arm64-v8a)**
+- Android 9+ (API 28), **ARM64 (arm64-v8a)** ou **emulador x86_64**
 - ~1GB free storage for the runtime (download ~30MB, installed ~150MB base)
 
 ## Build (this repo)

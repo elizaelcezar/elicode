@@ -167,7 +167,7 @@ fun SettingsScreen(graph: AppGraph, onOpenDiagnostics: () -> Unit) {
                 modifier = Modifier.fillMaxWidth()
             ) { Text("Clear logs") }
         }
-        Text("EliCode ${appVersion(context)} · minSdk 28 · arm64-v8a",
+        Text("EliCode ${appVersion(context)} · minSdk 28 · ${status.arch.ifBlank { "arm64/x86_64" }}",
             style = MaterialTheme.typography.labelSmall)
     }
 }

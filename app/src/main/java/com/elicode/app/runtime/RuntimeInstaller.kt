@@ -51,10 +51,17 @@ class RuntimeInstaller(private val context: Context, val paths: RuntimePaths) {
     private val gson = Gson()
 
     fun loadConfig(): Config {
+        val abis = Build.SUPPORTED_ABIS?.toList().orEmpty()
+        return loadConfigFor(ArchSupport.selectArch(abis))
+    }
+
+    /** Arch-aware loader (testable): [arch] is "arm64", "x86_64" or "" (legacy keys). */
+    fun loadConfigFor(arch: String): Config {
         val bundled = context.assets.open("bootstrap/runtime.json").bufferedReader().use { it.readText() }
         val root = gson.fromJson(bundled, Map::class.java) as Map<*, *>
         fun pkg(key: String): Package {
-            val m = root[key] as Map<*, *>
+            val m = root[key] as? Map<*, *>
+                ?: throw IllegalStateException("Missing package '$key' in runtime.json")
             val mirrors = (m["mirrors"] as? List<*>)?.filterIsInstance<String>().orEmpty()
             val url = (m["url"] as? String).orEmpty()
             // HTTPS first: Android blocks cleartext http by default, so an
@@ -67,13 +74,21 @@ class RuntimeInstaller(private val context: Context, val paths: RuntimePaths) {
                 (m["sha256"] as? String).orEmpty()
             )
         }
+        // x86_64 keys fall back to the legacy (arm64) keys when absent,
+        // so a v1 manifest still installs on ARM64 devices.
+        fun archPkg(base: String): Package {
+            if (arch == ArchSupport.X86_64 && root.containsKey("${base}_x86_64")) {
+                return pkg("${base}_x86_64")
+            }
+            return pkg(base)
+        }
         return Config(
             version = (root["version"] as? Double)?.toInt() ?: 1,
             minFreeBytes = (root["minFreeBytes"] as? Double)?.toLong() ?: 1_000_000_000L,
-            prootDeb = pkg("proot"),
-            tallocDeb = pkg("libtalloc"),
-            shmemDeb = pkg("libshmem"),
-            rootfs = pkg("rootfs")
+            prootDeb = archPkg("proot"),
+            tallocDeb = archPkg("libtalloc"),
+            shmemDeb = archPkg("libshmem"),
+            rootfs = archPkg("rootfs")
         )
     }
 
@@ -83,13 +98,14 @@ class RuntimeInstaller(private val context: Context, val paths: RuntimePaths) {
             val cfg = loadConfig()
             stage(listener, "prepare", 0f, "Checking device…")
             val abis = Build.SUPPORTED_ABIS?.toList().orEmpty()
-            if (!abis.any { it == "arm64-v8a" }) {
+            val arch = ArchSupport.selectArch(abis)
+            if (arch.isEmpty()) {
                 throw InstallFail(
                     EliError(
                         operation = "Check architecture",
                         message = "Supported ABIs: ${abis.joinToString()}",
-                        probableCause = "EliCode's Linux runtime ships ARM64 binaries only.",
-                        suggestedFix = "Use an ARM64 (arm64-v8a) device. x86 emulators are not supported in v0.1."
+                        probableCause = "EliCode's Linux runtime ships ARM64 + x86_64 binaries only.",
+                        suggestedFix = "Use an ARM64 device or an x86_64 emulator."
                     )
                 )
             }
@@ -119,13 +135,14 @@ class RuntimeInstaller(private val context: Context, val paths: RuntimePaths) {
             ArchiveExtractor.extractDeb(shmemDeb, File(stageDir, "shmem"))
             installProotFromStage(stageDir)
             val machine = ArchiveExtractor.elfMachine(paths.prootBin)
-            if (machine != ArchiveExtractor.EM_AARCH64) {
+            val expected = ArchSupport.expectedElf(arch)
+            if (machine != expected) {
                 throw InstallFail(
                     EliError(
                         operation = "Validate PRoot",
-                        message = "ELF machine=${machine ?: "unknown"} (expected 183/AArch64).",
+                        message = "ELF machine=${machine ?: "unknown"} (expected $expected/${arch}).",
                         probableCause = "Wrong-architecture PRoot binary.",
-                        suggestedFix = "Delete runtime/downloads and retry on an ARM64 device."
+                        suggestedFix = "Delete runtime/downloads and retry (arch=$arch)."
                     )
                 )
             }

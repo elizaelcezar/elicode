@@ -188,6 +188,7 @@ object ArchiveExtractor {
     }
 
     const val EM_AARCH64 = 183
+    const val EM_X86_64 = 62
 
     private class CountingInputStream(private val inner: InputStream) : InputStream() {
         var count = 0L

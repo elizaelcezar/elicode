@@ -29,6 +29,8 @@ class RuntimeManager(val context: Context) : GitShell {
 
     data class Status(
         val arm64: Boolean = false,
+        val supported: Boolean = false,
+        val arch: String = "",
         val installed: Boolean = false,
         val version: Int = 0,
         val freeBytes: Long = 0L,
@@ -42,11 +44,17 @@ class RuntimeManager(val context: Context) : GitShell {
     )
 
     private val _status = MutableStateFlow(
-        Status(arm64 = Build.SUPPORTED_ABIS?.contains("arm64-v8a") == true)
+        Status(
+            arm64 = Build.SUPPORTED_ABIS?.contains("arm64-v8a") == true,
+            supported = ArchSupport.isSupported(Build.SUPPORTED_ABIS?.toList().orEmpty()),
+            arch = ArchSupport.selectArch(Build.SUPPORTED_ABIS?.toList().orEmpty())
+        )
     )
     val status: StateFlow<Status> = _status
 
     fun isArm64(): Boolean = Build.SUPPORTED_ABIS?.contains("arm64-v8a") == true
+    fun currentArch(): String = ArchSupport.selectArch(Build.SUPPORTED_ABIS?.toList().orEmpty())
+    fun isSupported(): Boolean = currentArch().isNotEmpty()
     fun freeBytes(): Long = runCatching {
         StatFs(context.filesDir.absolutePath).availableBytes
     }.getOrDefault(-1L)
@@ -63,7 +71,9 @@ class RuntimeManager(val context: Context) : GitShell {
     fun refreshStatus(probeTools: Boolean = false) {
         // Publish cheap facts immediately so the UI never flashes a stale
         // "device incompatible / 0MB free" state while validators run.
-        _status.value = _status.value.copy(arm64 = isArm64(), freeBytes = freeBytes())
+        _status.value = _status.value.copy(
+            arm64 = isArm64(), supported = isSupported(), arch = currentArch(), freeBytes = freeBytes()
+        )
         scope.launch {
             val core = runCatching { validator.validateCore() }.getOrDefault(emptyList())
             val coreOk = core.isNotEmpty() && core.all { !it.required || it.ok }
@@ -72,6 +82,8 @@ class RuntimeManager(val context: Context) : GitShell {
             } else _status.value.toolChecks
             _status.value = _status.value.copy(
                 arm64 = isArm64(),
+                supported = isSupported(),
+                arch = currentArch(),
                 installed = coreOk && paths.installedVersion() > 0,
                 version = paths.installedVersion(),
                 freeBytes = freeBytes(),

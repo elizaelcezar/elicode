@@ -25,14 +25,16 @@ class RuntimeValidator(context: Context, private val paths: RuntimePaths) {
     fun validateCore(): List<Check> {
         val out = mutableListOf<Check>()
         val abis = Build.SUPPORTED_ABIS?.toList().orEmpty()
+        val arch = ArchSupport.selectArch(abis)
         out += Check(
-            "arch-arm64", abis.contains("arm64-v8a"),
-            "ABIs: ${abis.joinToString()}"
+            "arch", arch.isNotEmpty(),
+            "arch=$arch ABIs: ${abis.joinToString()}"
         )
         val elf = ArchiveExtractor.elfMachine(paths.prootBin)
+        val elfOk = elf == ArchiveExtractor.EM_AARCH64 || elf == ArchiveExtractor.EM_X86_64
         out += Check(
-            "proot-binary", paths.prootBin.isFile && elf == ArchiveExtractor.EM_AARCH64,
-            "ELF machine=$elf (want 183), size=${paths.prootBin.length()}"
+            "proot-binary", paths.prootBin.isFile && elfOk,
+            "ELF machine=$elf (want 183/arm64 or 62/x86_64), size=${paths.prootBin.length()}"
         )
         out += Check(
             "proot-runs",

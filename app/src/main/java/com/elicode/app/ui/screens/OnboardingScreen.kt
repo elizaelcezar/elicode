@@ -103,7 +103,7 @@ fun OnboardingScreen(graph: AppGraph, onReady: () -> Unit) {
         )
         Spacer(Modifier.height(8.dp))
         listOf(
-            "Real Linux terminal (Ubuntu ARM64, no Termux)",
+            "Real Linux terminal (Ubuntu, no Termux)",
             "OpenCode AI agent working in your project",
             "GitHub: clone, commit, pull, push",
             "Local preview for web projects",
@@ -117,13 +117,13 @@ fun OnboardingScreen(graph: AppGraph, onReady: () -> Unit) {
             )
         }
         Spacer(Modifier.height(8.dp))
-        if (!status.arm64) {
+        if (!status.supported) {
             ErrorCard(
                 EliError(
                     operation = "Device compatibility",
-                    message = "This device does not expose the arm64-v8a ABI.",
-                    probableCause = "The Linux runtime ships ARM64 binaries only.",
-                    suggestedFix = "EliCode v0.1 requires an ARM64 device."
+                    message = "This device exposes neither arm64-v8a nor x86_64 ABI.",
+                    probableCause = "The Linux runtime ships ARM64 + x86_64 binaries only.",
+                    suggestedFix = "Use an ARM64 device or an x86_64 emulator."
                 )
             )
         }

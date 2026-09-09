@@ -62,4 +62,6 @@ proot -r rootfs -0 --kernel-release=5.15.0 \
 - PRoot ≠ sandbox: no container/KVM isolation. Documented in-app.
 - Pipe-based shells: no true PTY (no `vim`/job control) until the JNI
   bridge lands. Interactive stdin, streaming, cancel and process trees work.
-- x86/x86_64 devices are rejected with a clear message (ARM64 binaries only).
+- Architectures: ARM64 devices use Ubuntu arm64, x86_64 emulators use
+  Ubuntu amd64 (manifest v2, auto-selected by ABI, ARM64 preferred).
+  32-bit ABIs (armeabi-v7a, x86) remain unsupported.
