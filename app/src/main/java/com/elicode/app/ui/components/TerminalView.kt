@@ -129,8 +129,9 @@ class TerminalController(
     }
 
     fun interrupt() {
-        // SIGINT equivalent for pipe shells: ETX char; fallback kills line.
-        shell?.writeStdin("\u0003\n")
+        // True ^C on native processes (SIGINT to the process group);
+        // ETX byte fallback on pipe-based JVM processes.
+        shell?.interrupt()
     }
 
     fun restart() {

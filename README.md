@@ -25,7 +25,8 @@ gradle :app:assembleDebug
 ```
 
 Toolchain (preinstalled on the build machine): JDK 17, Android SDK 36,
-ARM64 Build Tools 35.0.0, Gradle 8.14.3, AGP 8.11.0, Kotlin 1.9.22.
+Build Tools 35.0.0, Gradle 8.14.3, AGP 8.11.0, Kotlin 1.9.22,
+NDK 28.2 + CMake 3.31.6 (native PTY bridge, arm64-v8a + x86_64).
 
 Run unit tests:
 

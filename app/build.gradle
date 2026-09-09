@@ -6,6 +6,7 @@ plugins {
 android {
     namespace 'com.elicode.app'
     compileSdk 36
+    ndkVersion '28.2.13676358'
 
     defaultConfig {
         applicationId 'com.elicode.app'
@@ -17,6 +18,18 @@ android {
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
         vectorDrawables {
             useSupportLibrary true
+        }
+        ndk {
+            // Product scope: ARM64 devices + x86_64 emulators (32-bit unsupported).
+            abiFilters 'arm64-v8a', 'x86_64'
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            // Keep in sync with native/CMakeLists.txt.
+            path = file('../native/CMakeLists.txt')
+            version = '3.31.6'
         }
     }
 

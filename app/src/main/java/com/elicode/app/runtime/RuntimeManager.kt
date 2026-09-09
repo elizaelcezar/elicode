@@ -20,7 +20,10 @@ import java.io.File
 class RuntimeManager(val context: Context) : GitShell {
 
     val paths = RuntimePaths(context)
-    val runner: ProcessRunner = JvmProcessRunner()
+    /** One-shots: split stdout/stderr (native pipe runner when available). */
+    val runner: ProcessRunner = defaultProcessRunner(usePty = false)
+    /** Interactive shells: real PTY (native when available). */
+    val interactiveRunner: ProcessRunner = defaultProcessRunner(usePty = true)
     val registry = ProcessRegistry()
     val installer = RuntimeInstaller(context, paths)
     val validator = RuntimeValidator(context, paths)
@@ -219,9 +222,9 @@ class RuntimeManager(val context: Context) : GitShell {
         val proc: EliProcess = if (isInstalled()) {
             val (binds, work) = guestWork(projectDir)
             val launch = ProotLauncher.shellLaunch(paths, work, binds)
-            runner.start(launch.argv, null, launch.env, "ubuntu-bash", listener)
+            interactiveRunner.start(launch.argv, null, launch.env, "ubuntu-bash", listener)
         } else {
-            runner.start(
+            interactiveRunner.start(
                 listOf("sh"), projectDir,
                 mapOf("TERM" to "xterm-256color", "PS1" to "elicode:$ "),
                 "host-sh", listener

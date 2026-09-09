@@ -57,6 +57,12 @@ class RuntimeValidator(context: Context, private val paths: RuntimePaths) {
         )
         val echo = guestEcho()
         out += Check("guest-bash", echo == "elicode-ok", "bash echo -> '$echo'")
+        out += Check(
+            "native-pty", NativeBridge.AVAILABLE,
+            if (NativeBridge.AVAILABLE) "libelicode_bridge.so loaded (real PTY + ^C)"
+            else "libelicode_bridge.so not loaded — JVM pipe fallback (no true ^C)",
+            required = false
+        )
         return out
     }
 

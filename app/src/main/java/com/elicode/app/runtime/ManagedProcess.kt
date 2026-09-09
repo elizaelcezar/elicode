@@ -77,6 +77,15 @@ class ManagedProcess(
         runCatching { stdin.close() }
     }
 
+    override fun interrupt() {
+        // SIGINT equivalent for pipe shells: ETX char (only programs that
+        // interpret it react — prefer the native runner for a true ^C).
+        runCatching {
+            stdin.write(byteArrayOf(0x03))
+            stdin.flush()
+        }
+    }
+
     override fun kill() {
         runCatching {
             // Kill the whole subtree (shell children like gradle/node servers).

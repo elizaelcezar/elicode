@@ -6,7 +6,8 @@ package com.elicode.app.runtime
  *
  * Implemented on top of [java.lang.Process] so it works both on the
  * Android host (real `sh`) and inside the Ubuntu runtime (via PRoot).
- * A JNI/PTY upgrade is possible later without changing callers.
+ * [NativeProcessRunner] upgrades spawning to a real PTY + process-group
+ * signals without changing callers — see [defaultProcessRunner].
  */
 interface ProcessListener {
     fun onOutput(stream: Stream, text: String)
@@ -29,6 +30,11 @@ interface EliProcess {
     val isAlive: Boolean
     fun writeStdin(text: String)
     fun closeStdin()
+    /**
+     * Best-effort foreground interrupt (Ctrl+C): SIGINT to the process
+     * group on native processes, ETX byte on pipe-based JVM processes.
+     */
+    fun interrupt()
     fun kill()
     fun waitFor(): Int
     fun snapshot(): ProcResult

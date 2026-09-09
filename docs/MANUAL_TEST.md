@@ -24,7 +24,8 @@ The product test from the spec — must pass before any release:
 
 Known honest limitations (shown in-app, not hidden):
 
-- No true PTY yet: `vim`, `htop`, sudo-password prompts don't work in the
-  terminal; use the editor + non-interactive commands.
+- Fullscreen TUIs (`vim`, `htop`) launch on a real tty but don't render
+  yet (screen-emulation view is future work); line-mode programs, `^C`,
+  password prompts and job control work via the JNI PTY bridge.
 - First Gradle/Node builds need network (dependency downloads).
 - x86_64 emulators supported (amd64 rootfs, manifest v2, auto-selected by ABI); 32-bit ABIs (armeabi-v7a, x86) remain unsupported.

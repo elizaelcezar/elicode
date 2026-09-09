@@ -60,8 +60,14 @@ proot -r rootfs -0 --kernel-release=5.15.0 \
 ## Limitations (honest)
 
 - PRoot ≠ sandbox: no container/KVM isolation. Documented in-app.
-- Pipe-based shells: no true PTY (no `vim`/job control) until the JNI
-  bridge lands. Interactive stdin, streaming, cancel and process trees work.
+- Terminal: real PTY via the JNI bridge (`libelicode_bridge.so`,
+  arm64-v8a + x86_64, `native/`): the guest sees a tty, so line editing,
+  ^C/SIGINT to the process group, hidden password prompts, job control
+  and process-group kill trees work; one-shots use pipe mode (split
+  stdout/stderr). Fullscreen TUIs (`vim`, `htop`) launch on a real tty
+  but need the upcoming screen-emulation view to render — line-mode
+  interaction works today. Diagnostics (Settings → Runtime) shows the
+  `native-pty` check; without the .so the app falls back to JVM pipes.
 - Architectures: ARM64 devices use Ubuntu arm64, x86_64 emulators use
   Ubuntu amd64 (manifest v2, auto-selected by ABI, ARM64 preferred).
   32-bit ABIs (armeabi-v7a, x86) remain unsupported.

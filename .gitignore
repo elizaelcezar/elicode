@@ -5,6 +5,9 @@ app/build/
 **/build/
 local.properties
 
+# Native (NDK/CMake)
+.cxx/
+
 # Android
 *.apk
 *.aab
