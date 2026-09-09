@@ -2,14 +2,12 @@ package com.elicode.app.ui
 
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.SmartToy
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
@@ -29,7 +27,6 @@ import com.elicode.app.ui.screens.AgentScreen
 import com.elicode.app.ui.screens.BuildScreen
 import com.elicode.app.ui.screens.DiagnosticsScreen
 import com.elicode.app.ui.screens.EditorScreen
-import com.elicode.app.ui.screens.GitHubScreen
 import com.elicode.app.ui.screens.GitScreen
 import com.elicode.app.ui.screens.OnboardingScreen
 import com.elicode.app.ui.screens.PreviewScreen
@@ -46,19 +43,23 @@ object Routes {
     const val PREVIEW = "preview"
     const val BUILD = "build"
     const val GIT = "git"
-    const val GITHUB = "github"
     const val SETTINGS = "settings"
     const val DIAGNOSTICS = "diagnostics"
 }
 
 private data class Tab(val route: String, val label: String, val icon: ImageVector)
 
+/**
+ * Product premise: 4 tabs — Terminal (pure opencode), Projects
+ * (local + GitHub), Preview (live) and Config (one-click setup).
+ * Editor/Build/AI/Git are project-detail screens reached from the
+ * Editor's action row, not tabs.
+ */
 private val tabs = listOf(
-    Tab(Routes.PROJECTS, "Projects", Icons.Default.Folder),
-    Tab(Routes.EDITOR, "Editor", Icons.Default.PlayArrow),
     Tab(Routes.TERMINAL, "Terminal", Icons.Default.Terminal),
-    Tab(Routes.AGENT, "AI", Icons.Default.SmartToy),
-    Tab(Routes.BUILD, "Build", Icons.Default.Build)
+    Tab(Routes.PROJECTS, "Projects", Icons.Default.Folder),
+    Tab(Routes.PREVIEW, "Preview", Icons.Default.Visibility),
+    Tab(Routes.SETTINGS, "Config", Icons.Default.Settings)
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -84,14 +85,6 @@ fun EliCodeNav(graph: AppGraph, nav: NavHostController = rememberNavController()
                 TopAppBar(
                     title = {
                         Text("EliCode" + (graph.session.project?.let { " · ${it.name}" } ?: ""))
-                    },
-                    actions = {
-                        IconButton(onClick = { go(Routes.PREVIEW) }) {
-                            Text("▶", modifier = Modifier)
-                        }
-                        IconButton(onClick = { go(Routes.GIT) }) { Text("⎇") }
-                        IconButton(onClick = { go(Routes.GITHUB) }) { Text("🐙") }
-                        IconButton(onClick = { go(Routes.SETTINGS) }) { Text("⚙") }
                     }
                 )
             }
@@ -123,15 +116,12 @@ fun EliCodeNav(graph: AppGraph, nav: NavHostController = rememberNavController()
                 composable(Routes.PROJECTS) {
                     ProjectsScreen(graph) { go(Routes.EDITOR) }
                 }
-                composable(Routes.EDITOR) { EditorScreen(graph) }
+                composable(Routes.EDITOR) { EditorScreen(graph, onNavigate = ::go) }
                 composable(Routes.TERMINAL) { TerminalScreen(graph) }
                 composable(Routes.AGENT) { AgentScreen(graph) }
                 composable(Routes.PREVIEW) { PreviewScreen(graph) }
                 composable(Routes.BUILD) { BuildScreen(graph) }
                 composable(Routes.GIT) { GitScreen(graph) }
-                composable(Routes.GITHUB) {
-                    GitHubScreen(graph) { go(Routes.EDITOR) }
-                }
                 composable(Routes.SETTINGS) {
                     SettingsScreen(graph) { go(Routes.DIAGNOSTICS) }
                 }

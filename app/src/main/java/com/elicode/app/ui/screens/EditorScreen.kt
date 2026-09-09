@@ -27,13 +27,19 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.elicode.app.AppGraph
 import com.elicode.app.core.FileManager
+import com.elicode.app.ui.Routes
 import com.elicode.app.ui.components.CodeEditor
 import com.elicode.app.ui.components.EmptyState
 import com.elicode.app.ui.components.FileTree
 import java.io.File
 
+/**
+ * Project detail: file tree + editor. Detail screens (AI agent, APK
+ * build, Git, live Preview) are one tap away in the action row —
+ * they are not bottom tabs (product premise: 4 tabs only).
+ */
 @Composable
-fun EditorScreen(graph: AppGraph) {
+fun EditorScreen(graph: AppGraph, onNavigate: (String) -> Unit) {
     val session = graph.session
     val project = session.project
     val context = LocalContext.current
@@ -47,6 +53,25 @@ fun EditorScreen(graph: AppGraph) {
     var showTree by remember { mutableStateOf(true) }
 
     Column(Modifier.fillMaxSize()) {
+        // Project actions (detail screens, not tabs).
+        androidx.compose.foundation.lazy.LazyRow(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 2.dp),
+            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(4.dp)
+        ) {
+            val actions = listOf(
+                "🤖 AI" to Routes.AGENT,
+                "📦 Build APK" to Routes.BUILD,
+                "⎇ Git" to Routes.GIT,
+                "👁 Preview" to Routes.PREVIEW
+            )
+            items(actions.size) { i ->
+                val (label, route) = actions[i]
+                androidx.compose.material3.OutlinedButton(onClick = { onNavigate(route) }) {
+                    Text(label, style = MaterialTheme.typography.labelMedium)
+                }
+            }
+        }
+        Divider()
         // Open file tabs.
         androidx.compose.foundation.lazy.LazyRow(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)

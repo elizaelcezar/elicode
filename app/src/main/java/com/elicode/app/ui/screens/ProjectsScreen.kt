@@ -33,6 +33,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -79,6 +81,8 @@ fun ProjectsScreen(graph: AppGraph, onOpenProject: () -> Unit) {
     var showClone by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<EliError?>(null) }
     var confirmDelete by remember { mutableStateOf<ProjectInfo?>(null) }
+    // Product premise: one Projects tab — local projects + GitHub panes.
+    var pane by remember { mutableStateOf(0) }
 
     fun reload() {
         loading = true
@@ -146,11 +150,18 @@ fun ProjectsScreen(graph: AppGraph, onOpenProject: () -> Unit) {
         Column(Modifier.fillMaxSize().padding(pad).padding(12.dp)) {
             Text("Projects", style = MaterialTheme.typography.headlineSmall)
             Text(
-                if (graph.runtime.isInstalled()) "Ubuntu runtime ✓" else "Runtime missing — install in Settings",
+                if (graph.runtime.isInstalled()) "Ubuntu runtime ✓" else "Runtime missing — install in Config",
                 style = MaterialTheme.typography.labelMedium,
                 color = if (graph.runtime.isInstalled()) MaterialTheme.colorScheme.tertiary
                 else MaterialTheme.colorScheme.error
             )
+            TabRow(selectedTabIndex = pane) {
+                Tab(selected = pane == 0, onClick = { pane = 0 }, text = { Text("My projects") })
+                Tab(selected = pane == 1, onClick = { pane = 1 }, text = { Text("GitHub") })
+            }
+            if (pane == 1) {
+                GitHubScreen(graph, onCloned = { reload() })
+            } else {
             error?.let { ErrorCard(it, onDismiss = { error = null }) }
             if (loading) {
                 LoadingRow("Loading projects…")
@@ -172,6 +183,7 @@ fun ProjectsScreen(graph: AppGraph, onOpenProject: () -> Unit) {
                         )
                     }
                 }
+            }
             }
         }
     }
