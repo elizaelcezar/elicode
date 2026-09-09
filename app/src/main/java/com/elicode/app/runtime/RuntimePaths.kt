@@ -9,8 +9,10 @@ import java.io.File
  * ```
  * filesDir/elicode/
  *   runtime/
- *     rootfs/        Ubuntu ARM64 tree (proot -r target)
+ *   rootfs/        Ubuntu ARM64 tree (proot -r target)
  *     tools/proot    PRoot static binary (aarch64)
+ *     tools/loader   PRoot ELF loader (PROOT_LOADER; from the proot .deb)
+ *     tools/loader32 PRoot 32-bit loader (PROOT_LOADER_32; from the proot .deb)
  *     tools/lib/     libtalloc.so, libandroid-shmem.so (LD_LIBRARY_PATH)
  *     downloads/     cached .deb / tarball (+ .part resume files)
  *     stage/         extraction scratch dir
@@ -29,6 +31,16 @@ class RuntimePaths(context: Context) {
     val rootfs: File = File(runtime, "rootfs")
     val tools: File = File(runtime, "tools").apply { mkdirs() }
     val prootBin: File = File(tools, "proot")
+    /**
+     * PRoot ELF loader helpers shipped inside the proot .deb
+     * (`libexec/proot/loader`, `loader32`). Without PROOT_LOADER
+     * pointing here, proot reports `execve("/usr/bin/bash")` ENOENT
+     * ("the loader was not found") even when bash is present —
+     * the kernel cannot resolve the guest INTERP
+     * (/lib/ld-linux-aarch64.so.1) on the Android host by itself.
+     */
+    val loaderBin: File = File(tools, "loader")
+    val loader32Bin: File = File(tools, "loader32")
     val toolsLib: File = File(tools, "lib").apply { mkdirs() }
     val downloads: File = File(runtime, "downloads").apply { mkdirs() }
     val stage: File = File(runtime, "stage").apply { mkdirs() }

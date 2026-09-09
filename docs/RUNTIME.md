@@ -8,6 +8,7 @@ Everything lives under the app-private dir `filesDir/elicode/runtime`
 | Path | Content |
 |---|---|
 | `tools/proot` | PRoot 5.1.107 aarch64 (Termux build, GPL-2.0) |
+| `tools/loader`, `tools/loader32` | PRoot ELF loader helpers (`PROOT_LOADER` / `PROOT_LOADER_32`, from the proot .deb) |
 | `tools/lib/` | `libtalloc.so`, `libandroid-shmem.so` (`LD_LIBRARY_PATH`) |
 | `rootfs/` | Ubuntu 22.04 base ARM64 (~30MB tgz, ~110MB extracted) |
 | `downloads/` | Cached `.deb`/`.tgz` + `.part` resume files |
@@ -49,6 +50,22 @@ proot -r rootfs -0 --kernel-release=5.15.0 \
 ```
 
 `-0` = fakeroot (apt/dpkg-friendly, no Android root needed).
+
+Every launch exports `PROOT_LOADER` (+ `PROOT_LOADER_32`) pointing
+at `tools/loader`. The Termux proot build defaults to
+`/data/data/com.termux/.../libexec/proot/loader`, which never exists
+under EliCode's app id — without the override, guest exec fails with
+`execve("/usr/bin/bash")` ENOENT ("the loader was not found") even
+when bash is present. The installer copies both helpers out of the
+proot `.deb` (`libexec/proot/loader*`); older builds discarded them.
+
+Guest INTERP chain (Ubuntu 22.04 merged-/usr): bash asks for
+`/lib/ld-linux-aarch64.so.1` (x86_64: `ld-linux-x86-64.so.2`);
+`/lib → usr/lib`, and `usr/lib/<loader> → <triplet>/<loader>`.
+Either symlink missing → kernel ENOENT on the same
+`execve("/usr/bin/bash")`. `RuntimeValidator` checks both the
+proot loader files and this chain (`rootfs-loader`), so Repair
+can tell "rootfs corrupt" apart from "loader missing".
 
 ## Optional toolchains (on demand, inside Ubuntu shell)
 

@@ -68,13 +68,13 @@ fun OnboardingScreen(graph: AppGraph, onReady: () -> Unit) {
         ensureNotifPermission()
         com.elicode.app.service.EliCodeService.taskStarted(context, "runtime-install", "Installing Linux runtime")
         graph.runtime.install(object : RuntimeInstaller.Listener {
-            override fun onStage(stage: String, fraction: Float, message: String) {
-                graph.logs.add("Runtime", "install", "$stage: $message")
-            }
+            // NOTE: no graph.logs.add here — RuntimeInstaller already
+            // writes every stage + final error to the unified LogStore;
+            // logging again duplicates each line in Diagnostics.
+            override fun onStage(stage: String, fraction: Float, message: String) { }
 
             override fun onDone() {
                 com.elicode.app.service.EliCodeService.taskFinished(context, "runtime-install")
-                graph.logs.add("Runtime", "install", "Runtime ready.")
                 scope.launch {
                     graph.prefs.onboardingDone = true
                     working = false
@@ -84,7 +84,6 @@ fun OnboardingScreen(graph: AppGraph, onReady: () -> Unit) {
 
             override fun onError(e: EliError) {
                 com.elicode.app.service.EliCodeService.taskFinished(context, "runtime-install")
-                graph.logs.add("Runtime", "install", "FAILED: ${e.format()}")
                 scope.launch { working = false; error = e }
             }
         })

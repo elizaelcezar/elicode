@@ -38,4 +38,12 @@ class ArchSupportTest {
         assertEquals(ArchiveExtractor.EM_AARCH64, ArchSupport.expectedElf("arm64"))
         assertEquals(ArchiveExtractor.EM_X86_64, ArchSupport.expectedElf("x86_64"))
     }
+
+    @Test
+    fun guestLoaderNamePerArch() {
+        // Matches Ubuntu 22.04 INTERP filenames (verified from the
+        // ubuntu-base tarball: /lib/<name> with merged-/usr).
+        assertEquals("ld-linux-aarch64.so.1", ArchSupport.guestLoaderName("arm64"))
+        assertEquals("ld-linux-x86-64.so.2", ArchSupport.guestLoaderName("x86_64"))
+    }
 }

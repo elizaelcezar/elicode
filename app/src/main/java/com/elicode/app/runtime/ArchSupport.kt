@@ -33,4 +33,16 @@ object ArchSupport {
         ARM64 -> "arm64-v8a"
         else -> "unsupported"
     }
+
+    /**
+     * Guest dynamic loader filename for [arch] (Ubuntu 22.04):
+     * arm64 → ld-linux-aarch64.so.1, x86_64 → ld-linux-x86-64.so.2.
+     * Bash's INTERP is /lib/<name>; /lib is a symlink to usr/lib
+     * (merged-/usr) and usr/lib/<name> is itself a symlink to the
+     * arch triplet dir. Pure — unit-testable.
+     */
+    fun guestLoaderName(arch: String): String = when (arch) {
+        X86_64 -> "ld-linux-x86-64.so.2"
+        else -> "ld-linux-aarch64.so.1"
+    }
 }

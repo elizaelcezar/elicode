@@ -4,9 +4,14 @@ import com.elicode.app.runtime.ArchSupport
 import com.elicode.app.runtime.ProotLauncher
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 
 class ProotLinkerTest {
+
+    @get:Rule
+    val tmp = TemporaryFolder()
 
     @Test
     fun linkerNamePerArch() {
@@ -40,5 +45,21 @@ class ProotLinkerTest {
         assertEquals(1, ProotLauncher.pickMode(false, true, true))
         assertEquals(2, ProotLauncher.pickMode(false, false, true))
         assertEquals(-1, ProotLauncher.pickMode(false, false, false))
+    }
+
+    @Test
+    fun loaderEnvPointsAtInstalledHelpers() {
+        val loader = tmp.newFile("loader").apply { writeText("x") }
+        val loader32 = tmp.newFile("loader32").apply { writeText("y") }
+        val env = ProotLauncher.loaderEnv(loader, loader32)
+        assertEquals(loader.absolutePath, env["PROOT_LOADER"])
+        assertEquals(loader32.absolutePath, env["PROOT_LOADER_32"])
+    }
+
+    @Test
+    fun loaderEnvOmitsMissingHelpers() {
+        val missing = java.io.File(tmp.root, "nope-loader")
+        val env = ProotLauncher.loaderEnv(missing, null)
+        assertTrue(env.isEmpty())
     }
 }

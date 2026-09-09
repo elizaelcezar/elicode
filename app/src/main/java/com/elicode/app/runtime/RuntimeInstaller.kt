@@ -660,6 +660,18 @@ class RuntimeInstaller(
         val proot = find("proot", File(stageDir, "proot"))
             ?: throw InstallFail(EliError("Install PRoot", message = "proot binary not found in .deb"))
         proot.copyTo(paths.prootBin, overwrite = true)
+        // ELF loader helpers (PROOT_LOADER / PROOT_LOADER_32): the Termux
+        // proot .deb ships libexec/proot/loader + loader32. Older EliCode
+        // builds discarded them, so every guest exec failed with
+        // execve("/usr/bin/bash") ENOENT ("the loader was not found")
+        // even with a healthy rootfs. Fail loudly when absent.
+        val loader = find("loader", File(stageDir, "proot"))
+            ?: throw InstallFail(EliError("Install PRoot", message = "proot loader not found in .deb"))
+        loader.copyTo(paths.loaderBin, overwrite = true)
+        find("loader32", File(stageDir, "proot"))?.copyTo(paths.loader32Bin, overwrite = true)
+        paths.prootBin.setExecutable(true, false)
+        paths.loaderBin.setExecutable(true, false)
+        if (paths.loader32Bin.isFile) paths.loader32Bin.setExecutable(true, false)
         // Shared libs: libtalloc.so*, libandroid-shmem.so
         stageDir.walkTopDown()
             .filter { it.isFile && (it.name.endsWith(".so") || ".so." in it.name) }

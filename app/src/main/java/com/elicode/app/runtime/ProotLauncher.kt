@@ -56,6 +56,22 @@ object ProotLauncher {
         else -> -1
     }
 
+    /**
+     * PROOT_LOADER env for guest execution. The Termux proot build
+     * defaults to /data/data/com.termux/.../libexec/proot/loader,
+     * which does not exist under EliCode's app id — without this
+     * override every guest exec fails with ENOENT ("the loader was
+     * not found") even when /usr/bin/bash is present. Pure —
+     * unit-tested. Paths are host-absolute; entries are only
+     * included when the file was installed.
+     */
+    fun loaderEnv(loader: File?, loader32: File?): Map<String, String> {
+        val env = mutableMapOf<String, String>()
+        if (loader != null && loader.isFile) env["PROOT_LOADER"] = loader.absolutePath
+        if (loader32 != null && loader32.isFile) env["PROOT_LOADER_32"] = loader32.absolutePath
+        return env
+    }
+
     fun shellLaunch(
         paths: RuntimePaths,
         workDirInGuest: String = "/projects",
@@ -136,7 +152,7 @@ object ProotLauncher {
         } else {
             argv += prootArgs
         }
-        val env = mapOf(
+        val env = mutableMapOf(
             "LD_LIBRARY_PATH" to paths.toolsLib.absolutePath,
             // THE tmpdir variable this proot build honors (verified in the
             // binary strings: "Please set PROOT_TMP_DIR env. variable").
@@ -150,6 +166,9 @@ object ProotLauncher {
             // Guest PATH: keep Ubuntu tools first.
             "PATH" to "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/node/bin"
         )
+        // ELF loader override (see loaderEnv): without it proot falls
+        // back to its compiled-in Termux path, which never exists here.
+        env.putAll(loaderEnv(paths.loaderBin, paths.loader32Bin))
         return Launch(argv, env)
     }
 

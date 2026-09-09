@@ -47,6 +47,13 @@ class RuntimeValidator(
             prootVersion().isNotBlank(),
             prootVersion().ifBlank { "proot --version failed" }
         )
+        out += Check(
+            "proot-loader", paths.loaderBin.isFile,
+            "loader=${paths.loaderBin.isFile} size=${paths.loaderBin.length()} " +
+                "exec=${paths.loaderBin.canExecute()} " +
+                "loader32=${paths.loader32Bin.isFile} " +
+                "(PROOT_LOADER unset → guest execve ENOENT even with bash present)"
+        )
         val bash = File(paths.rootfs, "bin/bash")
         val bashUsr = File(paths.rootfs, "usr/bin/bash")
         // Ubuntu 22.04 uses merged-/usr: /bin is a symlink to usr/bin. Some
@@ -67,6 +74,7 @@ class RuntimeValidator(
             "exit=${echo.exitCode} out='${echo.stdout.trim().take(300)}' " +
                 "err='${echo.stderr.trim().take(500)}'"
         )
+        out += guestLoaderCheck(arch)
         out += Check(
             "guest-bash", echo.stdout.trim() == "elicode-ok",
             "exit=${echo.exitCode} out='${echo.stdout.trim().take(120)}' " +
@@ -98,6 +106,27 @@ class RuntimeValidator(
         paths.prootBin.isFile ||
             File(paths.rootfs, "bin/bash").isFile ||
             File(paths.rootfs, "usr/bin/bash").isFile
+
+    /**
+     * Guest dynamic loader chain (Ubuntu 22.04 merged-/usr): bash's
+     * INTERP is /lib/<name>; /lib → usr/lib, and usr/lib/<name> →
+     * <triplet>/<name>. Any broken symlink yields kernel ENOENT on
+     * execve("/usr/bin/bash") even though bash itself exists.
+     */
+    internal fun guestLoaderCheck(arch: String): Check {
+        val name = ArchSupport.guestLoaderName(arch)
+        val triplet = if (arch == ArchSupport.X86_64) "x86_64-linux-gnu" else "aarch64-linux-gnu"
+        val viaLib = File(paths.rootfs, "lib/$name")
+        val viaUsrLib = File(paths.rootfs, "usr/lib/$name")
+        val real = File(paths.rootfs, "usr/lib/$triplet/$name")
+        val libLink = File(paths.rootfs, "lib")
+        val ok = viaLib.isFile
+        val detail = "INTERP=/lib/$name viaLib=${viaLib.isFile} " +
+            "usrLibLink=${viaUsrLib.isFile} real=${real.isFile} " +
+            "libSymlink=${java.nio.file.Files.isSymbolicLink(libLink.toPath())} " +
+            "usrLibSymlink=${java.nio.file.Files.isSymbolicLink(viaUsrLib.toPath())}"
+        return Check("rootfs-loader", ok, if (ok) detail else "$detail — broken symlink chain leaves bash un-executable")
+    }
 
     private fun prootVersion(): String {
         if (!paths.prootBin.isFile) return ""
