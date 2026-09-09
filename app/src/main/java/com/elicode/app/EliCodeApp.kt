@@ -11,6 +11,7 @@ import com.elicode.app.git.GitEngine
 import com.elicode.app.github.GitHubApi
 import com.elicode.app.preview.PreviewEngine
 import com.elicode.app.runtime.RuntimeManager
+import com.elicode.app.runtime.SetupOrchestrator
 import com.elicode.app.ui.SessionState
 
 /** Application + object graph (no DI framework needed at this size). */
@@ -37,4 +38,5 @@ class AppGraph(val app: EliCodeApp) {
     val build = BuildEngine(app, runtime)
     val preview = PreviewEngine(runtime)
     val github = GitHubApi()
+    val setup = SetupOrchestrator(app, runtime, agent)
 }

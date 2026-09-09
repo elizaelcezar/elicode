@@ -87,7 +87,7 @@ fun AgentScreen(graph: AppGraph) {
                 if (!s.runtimeReady) {
                     Text("Prepare the environment in Settings → Runtime first.")
                 } else if (s.nodeVersion == null) {
-                    Text("Node.js was not found in Ubuntu. Install it inside the runtime (Terminal: sudo apt install nodejs npm — or the Node toolchain).")
+                    Text("Node.js was not found in Ubuntu. Run Config → ⚡ Configurar tudo (one-click setup).")
                 } else if (s.opencodeVersion == null) {
                     Button(
                         onClick = {

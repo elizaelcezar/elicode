@@ -33,6 +33,7 @@ import com.elicode.app.core.EliError
 import com.elicode.app.core.EliResult
 import com.elicode.app.core.logs.LogStore
 import com.elicode.app.runtime.RuntimeInstaller
+import com.elicode.app.runtime.SetupOrchestrator
 import com.elicode.app.service.EliCodeService
 import com.elicode.app.ui.components.ErrorCard
 import com.elicode.app.ui.components.FormCard
@@ -74,7 +75,10 @@ fun SettingsScreen(graph: AppGraph, onOpenDiagnostics: () -> Unit) {
     }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp)) {
-        Text("Settings", style = MaterialTheme.typography.headlineSmall)
+        Text("Config", style = MaterialTheme.typography.headlineSmall)
+
+        SectionHeader("One-click setup")
+        OneClickSetupCard(graph)
 
         SectionHeader("General")
         FormCard {
@@ -169,6 +173,81 @@ fun SettingsScreen(graph: AppGraph, onOpenDiagnostics: () -> Unit) {
         }
         Text("EliCode ${appVersion(context)} · minSdk 28 · ${status.arch.ifBlank { "arm64/x86_64" }}",
             style = MaterialTheme.typography.labelSmall)
+    }
+}
+
+@Composable
+private fun OneClickSetupCard(graph: AppGraph) {
+    val scope = rememberCoroutineScope()
+    var steps by remember { mutableStateOf(SetupOrchestrator.defaultSteps()) }
+    var log by remember { mutableStateOf("") }
+    var running by remember { mutableStateOf(false) }
+    var done by remember { mutableStateOf<Boolean?>(null) }
+
+    fun appendLog(t: String) {
+        log = (log + "\n" + t).takeLast(4000)
+    }
+
+    FormCard {
+        Text(
+            "Installs Ubuntu runtime → Node.js → OpenCode → Android toolchain. " +
+                "Safe to re-run: finished steps are skipped.",
+            style = MaterialTheme.typography.bodySmall
+        )
+        steps.forEach { s ->
+            val icon = when (s.state) {
+                SetupOrchestrator.State.DONE, SetupOrchestrator.State.SKIPPED -> "✓"
+                SetupOrchestrator.State.RUNNING -> "…"
+                SetupOrchestrator.State.FAILED -> "✗"
+                else -> "•"
+            }
+            Text(
+                "$icon ${s.label}" + (if (s.detail.isNotBlank()) " — ${s.detail.take(80)}" else ""),
+                style = MaterialTheme.typography.bodySmall,
+                color = if (s.state == SetupOrchestrator.State.FAILED) MaterialTheme.colorScheme.error
+                else MaterialTheme.colorScheme.onSurface
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+                onClick = {
+                    log = ""
+                    done = null
+                    running = true
+                    graph.setup.start(object : SetupOrchestrator.Listener {
+                        override fun onUpdate(updated: List<SetupOrchestrator.Step>) {
+                            scope.launch(Dispatchers.Main) { steps = updated }
+                        }
+
+                        override fun onLog(t: String) {
+                            scope.launch(Dispatchers.Main) { appendLog(t) }
+                        }
+
+                        override fun onDone(allOk: Boolean) {
+                            scope.launch(Dispatchers.Main) {
+                                running = false
+                                done = allOk
+                                graph.runtime.refreshStatus(probeTools = true)
+                            }
+                        }
+                    })
+                },
+                enabled = !running
+            ) { Text(if (running) "Configurando…" else "⚡ Configurar tudo") }
+            if (running) {
+                OutlinedButton(onClick = { graph.setup.cancel() }) { Text("Cancel") }
+            }
+        }
+        done?.let {
+            Text(
+                if (it) "✓ Tudo pronto! Abra a aba Terminal."
+                else "Algo falhou — veja o log acima e rode de novo.",
+                style = MaterialTheme.typography.bodySmall,
+                color = if (it) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.error
+            )
+        }
+        if (log.isNotBlank()) MonoLogCard(log)
     }
 }
 
